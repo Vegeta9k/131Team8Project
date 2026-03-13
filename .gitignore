@@ -1,0 +1,40 @@
+gitignore
+# IDE / Editor
+.idea/
+*.iml
+*.ipr
+*.iws
+.project
+.settings/
+.classpath
+
+# Gradle / Build
+.gradle/
+build/
+/*/build/
+captures/
+.externalNativeBuild
+.cxx/
+
+# Local configuration (Crucial: do not share these!)
+local.properties
+google-services.json
+
+# If you want to keep google-services.json in git (common for team apps),
+# you can comment the line above with a #.
+
+# Machine specific / Temporary
+.DS_Store
+/captures
+/lint
+/outputs
+
+# Log files
+*.log
+
+# Android Studio / IntelliJ specific
+/shelf/
+/workspace.xml
+/tasks.xml
+/dictionaries
+/libraries
