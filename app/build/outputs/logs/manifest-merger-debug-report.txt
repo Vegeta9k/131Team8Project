@@ -1,16 +1,16 @@
 -- Merging decision tree log ---
 meta-data#com.google.android.geo.API_KEY
-INJECTED from D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:15:9-17:47
+INJECTED from D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:15:9-17:47
 	android:value
-		INJECTED from D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml
-		ADDED from D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:17:13-44
+		INJECTED from D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml
+		ADDED from D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:17:13-44
 	android:name
-		ADDED from D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:16:13-58
+		ADDED from D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:16:13-58
 manifest
-ADDED from D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:2:1-30:12
-INJECTED from D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:2:1-30:12
-INJECTED from D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:2:1-30:12
-INJECTED from D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:2:1-30:12
+ADDED from D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:2:1-30:12
+INJECTED from D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:2:1-30:12
+INJECTED from D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:2:1-30:12
+INJECTED from D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:2:1-30:12
 MERGED from [com.google.maps.android:maps-compose:4.4.1] C:\Users\juand\.gradle\caches\transforms-4\177284acc1910f5db5be93af4bcc2afd\transformed\maps-compose-4.4.1\AndroidManifest.xml:17:1-22:12
 MERGED from [com.google.android.gms:play-services-location:21.3.0] C:\Users\juand\.gradle\caches\transforms-4\1acf9bf8f188d06c02ffc03d37398c8f\transformed\play-services-location-21.3.0\AndroidManifest.xml:2:1-8:12
 MERGED from [com.google.firebase:firebase-firestore-ktx:24.11.1] C:\Users\juand\.gradle\caches\transforms-4\00c201735dd748398edbc2e72888cdc3\transformed\firebase-firestore-ktx-24.11.1\AndroidManifest.xml:2:1-18:12
@@ -90,15 +90,15 @@ MERGED from [androidx.arch.core:core-runtime:2.2.0] C:\Users\juand\.gradle\cache
 MERGED from [io.grpc:grpc-android:1.57.2] C:\Users\juand\.gradle\caches\transforms-4\f145d3913030e596e2fabe02cf556c25\transformed\grpc-android-1.57.2\AndroidManifest.xml:2:1-9:12
 MERGED from [com.google.firebase:protolite-well-known-types:18.0.0] C:\Users\juand\.gradle\caches\transforms-4\6f6d928fc706f05ad66b37119c11aabc\transformed\protolite-well-known-types-18.0.0\AndroidManifest.xml:2:1-11:12
 	package
-		INJECTED from D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml
+		INJECTED from D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml
 	android:versionName
-		INJECTED from D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml
+		INJECTED from D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml
 	android:versionCode
-		INJECTED from D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml
+		INJECTED from D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml
 	xmlns:android
-		ADDED from D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:2:11-69
+		ADDED from D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:2:11-69
 uses-permission#android.permission.INTERNET
-ADDED from D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:4:5-67
+ADDED from D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:4:5-67
 MERGED from [com.google.firebase:firebase-firestore:24.11.1] C:\Users\juand\.gradle\caches\transforms-4\93bbe9c72397011bc529addb440db0d6\transformed\firebase-firestore-24.11.1\AndroidManifest.xml:11:5-67
 MERGED from [com.google.firebase:firebase-firestore:24.11.1] C:\Users\juand\.gradle\caches\transforms-4\93bbe9c72397011bc529addb440db0d6\transformed\firebase-firestore-24.11.1\AndroidManifest.xml:11:5-67
 MERGED from [com.google.android.gms:play-services-maps:18.2.0] C:\Users\juand\.gradle\caches\transforms-4\bcf3234871d2197eb97e4df2f4377991\transformed\play-services-maps-18.2.0\AndroidManifest.xml:24:5-67
@@ -108,18 +108,18 @@ MERGED from [com.google.firebase:firebase-auth:22.3.1] C:\Users\juand\.gradle\ca
 MERGED from [com.google.android.recaptcha:recaptcha:18.4.0] C:\Users\juand\.gradle\caches\transforms-4\e567f416afe3722f82fbd8fde0b34d14\transformed\recaptcha-18.4.0\AndroidManifest.xml:7:5-67
 MERGED from [com.google.android.recaptcha:recaptcha:18.4.0] C:\Users\juand\.gradle\caches\transforms-4\e567f416afe3722f82fbd8fde0b34d14\transformed\recaptcha-18.4.0\AndroidManifest.xml:7:5-67
 	android:name
-		ADDED from D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:4:22-64
+		ADDED from D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:4:22-64
 uses-permission#android.permission.ACCESS_COARSE_LOCATION
-ADDED from D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:5:5-81
+ADDED from D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:5:5-81
 	android:name
-		ADDED from D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:5:22-78
+		ADDED from D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:5:22-78
 uses-permission#android.permission.ACCESS_FINE_LOCATION
-ADDED from D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:6:5-79
+ADDED from D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:6:5-79
 	android:name
-		ADDED from D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:6:22-76
+		ADDED from D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:6:22-76
 application
-ADDED from D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:8:5-28:19
-INJECTED from D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:8:5-28:19
+ADDED from D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:8:5-28:19
+INJECTED from D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:8:5-28:19
 MERGED from [com.google.android.gms:play-services-location:21.3.0] C:\Users\juand\.gradle\caches\transforms-4\1acf9bf8f188d06c02ffc03d37398c8f\transformed\play-services-location-21.3.0\AndroidManifest.xml:6:5-20
 MERGED from [com.google.android.gms:play-services-location:21.3.0] C:\Users\juand\.gradle\caches\transforms-4\1acf9bf8f188d06c02ffc03d37398c8f\transformed\play-services-location-21.3.0\AndroidManifest.xml:6:5-20
 MERGED from [com.google.firebase:firebase-firestore-ktx:24.11.1] C:\Users\juand\.gradle\caches\transforms-4\00c201735dd748398edbc2e72888cdc3\transformed\firebase-firestore-ktx-24.11.1\AndroidManifest.xml:8:5-16:19
@@ -165,39 +165,39 @@ MERGED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\juand\.g
 MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\juand\.gradle\caches\transforms-4\a3f5466d0f5c3d9dbba0744a3c176011\transformed\startup-runtime-1.1.1\AndroidManifest.xml:25:5-31:19
 MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\juand\.gradle\caches\transforms-4\a3f5466d0f5c3d9dbba0744a3c176011\transformed\startup-runtime-1.1.1\AndroidManifest.xml:25:5-31:19
 	android:extractNativeLibs
-		INJECTED from D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml
+		INJECTED from D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml
 	android:appComponentFactory
 		ADDED from [androidx.core:core:1.13.1] C:\Users\juand\.gradle\caches\transforms-4\d93b89b92d0081d4c29f07e0d599f31b\transformed\core-1.13.1\AndroidManifest.xml:28:18-86
 	android:supportsRtl
-		ADDED from D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:12:9-35
+		ADDED from D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:12:9-35
 	android:label
-		ADDED from D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:11:9-41
+		ADDED from D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:11:9-41
 	android:icon
-		ADDED from D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:10:9-55
+		ADDED from D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:10:9-55
 	android:allowBackup
-		ADDED from D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:9:9-35
+		ADDED from D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:9:9-35
 	android:theme
-		ADDED from D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:13:9-77
+		ADDED from D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:13:9-77
 activity#com.example.dailytasks.MainActivity
-ADDED from D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:19:9-27:20
+ADDED from D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:19:9-27:20
 	android:exported
-		ADDED from D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:21:13-36
+		ADDED from D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:21:13-36
 	android:name
-		ADDED from D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:20:13-41
+		ADDED from D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:20:13-41
 intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.LAUNCHER
-ADDED from D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:22:13-26:29
+ADDED from D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:22:13-26:29
 action#android.intent.action.MAIN
-ADDED from D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:23:17-69
+ADDED from D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:23:17-69
 	android:name
-		ADDED from D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:23:25-66
+		ADDED from D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:23:25-66
 category#android.intent.category.LAUNCHER
-ADDED from D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:25:17-77
+ADDED from D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:25:17-77
 	android:name
-		ADDED from D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:25:27-74
+		ADDED from D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:25:27-74
 uses-sdk
-INJECTED from D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml reason: use-sdk injection requested
-INJECTED from D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml
-INJECTED from D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml
+INJECTED from D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml reason: use-sdk injection requested
+INJECTED from D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml
+INJECTED from D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml
 MERGED from [com.google.maps.android:maps-compose:4.4.1] C:\Users\juand\.gradle\caches\transforms-4\177284acc1910f5db5be93af4bcc2afd\transformed\maps-compose-4.4.1\AndroidManifest.xml:20:5-44
 MERGED from [com.google.maps.android:maps-compose:4.4.1] C:\Users\juand\.gradle\caches\transforms-4\177284acc1910f5db5be93af4bcc2afd\transformed\maps-compose-4.4.1\AndroidManifest.xml:20:5-44
 MERGED from [com.google.android.gms:play-services-location:21.3.0] C:\Users\juand\.gradle\caches\transforms-4\1acf9bf8f188d06c02ffc03d37398c8f\transformed\play-services-location-21.3.0\AndroidManifest.xml:4:5-44
@@ -357,9 +357,9 @@ MERGED from [com.google.firebase:protolite-well-known-types:18.0.0] C:\Users\jua
 	tools:overrideLibrary
 		ADDED from [com.google.firebase:firebase-auth:22.3.1] C:\Users\juand\.gradle\caches\transforms-4\9d794ef334ac3fc467aa9819fc98c5b2\transformed\firebase-auth-22.3.1\AndroidManifest.xml:23:9-61
 	android:targetSdkVersion
-		INJECTED from D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml
+		INJECTED from D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml
 	android:minSdkVersion
-		INJECTED from D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml
+		INJECTED from D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml
 service#com.google.firebase.components.ComponentDiscoveryService
 ADDED from [com.google.firebase:firebase-firestore-ktx:24.11.1] C:\Users\juand\.gradle\caches\transforms-4\00c201735dd748398edbc2e72888cdc3\transformed\firebase-firestore-ktx-24.11.1\AndroidManifest.xml:9:9-15:19
 MERGED from [com.google.firebase:firebase-firestore:24.11.1] C:\Users\juand\.gradle\caches\transforms-4\93bbe9c72397011bc529addb440db0d6\transformed\firebase-firestore-24.11.1\AndroidManifest.xml:14:9-23:19

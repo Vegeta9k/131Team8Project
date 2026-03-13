@@ -9,14 +9,14 @@
 9        android:targetSdkVersion="35" />
 10
 11    <uses-permission android:name="android.permission.INTERNET" />
-11-->D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:4:5-67
-11-->D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:4:22-64
+11-->D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:4:5-67
+11-->D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:4:22-64
 12    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-12-->D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:5:5-81
-12-->D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:5:22-78
+12-->D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:5:5-81
+12-->D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:5:22-78
 13    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-13-->D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:6:5-79
-13-->D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:6:22-76
+13-->D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:6:5-79
+13-->D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:6:22-76
 14
 15    <!-- Although the *SdkVersion is captured in gradle build files, this is required for non gradle builds -->
 16    <!-- <uses-sdk android:minSdkVersion="14" /> -->
@@ -56,43 +56,43 @@
 35-->[androidx.core:core:1.13.1] C:\Users\juand\.gradle\caches\transforms-4\d93b89b92d0081d4c29f07e0d599f31b\transformed\core-1.13.1\AndroidManifest.xml:26:22-94
 36
 37    <application
-37-->D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:8:5-28:19
+37-->D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:8:5-28:19
 38        android:allowBackup="true"
-38-->D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:9:9-35
+38-->D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:9:9-35
 39        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
 39-->[androidx.core:core:1.13.1] C:\Users\juand\.gradle\caches\transforms-4\d93b89b92d0081d4c29f07e0d599f31b\transformed\core-1.13.1\AndroidManifest.xml:28:18-86
 40        android:debuggable="true"
 41        android:extractNativeLibs="false"
 42        android:icon="@android:drawable/ic_dialog_map"
-42-->D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:10:9-55
+42-->D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:10:9-55
 43        android:label="@string/app_name"
-43-->D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:11:9-41
+43-->D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:11:9-41
 44        android:supportsRtl="true"
-44-->D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:12:9-35
+44-->D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:12:9-35
 45        android:testOnly="true"
 46        android:theme="@android:style/Theme.DeviceDefault.Light.NoActionBar" >
-46-->D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:13:9-77
+46-->D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:13:9-77
 47        <meta-data
 48            android:name="com.google.android.geo.API_KEY"
-48-->D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:16:13-58
+48-->D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:16:13-58
 49            android:value="AIzaSyD7HXEXbBTo_ykSDr2jS8NNlUad0NSWwbU" />
-49-->D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:17:13-44
+49-->D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:17:13-44
 50
 51        <activity
-51-->D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:19:9-27:20
+51-->D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:19:9-27:20
 52            android:name="com.example.dailytasks.MainActivity"
-52-->D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:20:13-41
+52-->D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:20:13-41
 53            android:exported="true" >
-53-->D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:21:13-36
+53-->D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:21:13-36
 54            <intent-filter>
-54-->D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:22:13-26:29
+54-->D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:22:13-26:29
 55                <action android:name="android.intent.action.MAIN" />
-55-->D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:23:17-69
-55-->D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:23:25-66
+55-->D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:23:17-69
+55-->D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:23:25-66
 56
 57                <category android:name="android.intent.category.LAUNCHER" />
-57-->D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:25:17-77
-57-->D:\Curs\DailyTasksApp\app\src\main\AndroidManifest.xml:25:27-74
+57-->D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:25:17-77
+57-->D:\Curs\DailyTasksApp\131Team8Project\app\src\main\AndroidManifest.xml:25:27-74
 58            </intent-filter>
 59        </activity>
 60
