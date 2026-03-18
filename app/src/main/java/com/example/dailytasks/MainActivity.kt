@@ -91,7 +91,9 @@ private fun AppScreen(viewModel: MainViewModel) {
         AppDestination.SETTINGS -> {
             SettingsScreen(
                 darkThemeEnabled = viewModel.darkThemeEnabled.collectAsStateWithLifecycle().value,
+                profanityFilterEnabled = viewModel.profanityFilterEnabled.collectAsStateWithLifecycle().value,
                 onThemeChanged = viewModel::setDarkThemeEnabled,
+                onProfanityFilterChanged = viewModel::setProfanityFilterEnabled,
                 onBack = { destination = AppDestination.MAIN }
             )
         }
@@ -250,8 +252,20 @@ private fun LocationMessagesScreen(
                         }
                 ) {
                     Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = "Points: ${message.displayedPoints}",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
                         if (isExpanded) {
-                            Text(message.text, style = MaterialTheme.typography.bodyLarge)
+                            Text(viewModel.displayMessageText(message), style = MaterialTheme.typography.bodyLarge)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(onClick = { viewModel.upvoteMessage(message) }) {
+                                    Text("Upvote")
+                                }
+                                Button(onClick = { viewModel.downvoteMessage(message) }) {
+                                    Text("Downvote")
+                                }
+                            }
                             Text("Tap to hide", style = MaterialTheme.typography.bodySmall)
                         } else {
                             Text("Hidden message", style = MaterialTheme.typography.bodyLarge)
@@ -291,7 +305,19 @@ private fun MyMessagesScreen(
             items(myMessages, key = { it.id }) { message ->
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(message.text, style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            text = "Points: ${message.displayedPoints}",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Text(viewModel.displayMessageText(message), style = MaterialTheme.typography.bodyLarge)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = { viewModel.upvoteMessage(message) }) {
+                                Text("Upvote")
+                            }
+                            Button(onClick = { viewModel.downvoteMessage(message) }) {
+                                Text("Downvote")
+                            }
+                        }
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                             TextButton(onClick = { viewModel.deleteMessage(message) }) {
                                 Text("Delete")
@@ -307,7 +333,9 @@ private fun MyMessagesScreen(
 @Composable
 private fun SettingsScreen(
     darkThemeEnabled: Boolean,
+    profanityFilterEnabled: Boolean,
     onThemeChanged: (Boolean) -> Unit,
+    onProfanityFilterChanged: (Boolean) -> Unit,
     onBack: () -> Unit
 ) {
     Column(
@@ -334,6 +362,17 @@ private fun SettingsScreen(
             Switch(
                 checked = darkThemeEnabled,
                 onCheckedChange = onThemeChanged
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text("Profanity filter", style = MaterialTheme.typography.bodyLarge)
+            Switch(
+                checked = profanityFilterEnabled,
+                onCheckedChange = onProfanityFilterChanged
             )
         }
     }

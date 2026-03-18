@@ -27,7 +27,10 @@ class MessageSyncRepository(
             "latitude" to latitude,
             "longitude" to longitude,
             "createdAtEpochMs" to System.currentTimeMillis(),
-            "authorId" to uid
+            "authorId" to uid,
+            "upvotes" to 0L,
+            "downvotes" to 0L,
+            "rating" to 0L
         )
         return runCatching {
             messagesCollection.add(payload).await()
@@ -47,6 +50,50 @@ class MessageSyncRepository(
         }.map { Unit }
     }
 
+    suspend fun voteOnMessage(messageId: String, isUpvote: Boolean): Result<Unit> {
+        if (messageId.isBlank()) return Result.failure(IllegalArgumentException("Invalid message ID."))
+        val uid = runCatching { ensureSignedIn() }.getOrElse { return Result.failure(it) }
+        return runCatching {
+            firestore.runTransaction { transaction ->
+                val docRef = messagesCollection.document(messageId)
+                val voteRef = docRef.collection(VOTES_COLLECTION).document(uid)
+                val snapshot = transaction.get(docRef)
+                val voteSnapshot = transaction.get(voteRef)
+                val currentUpvotes = snapshot.getLong("upvotes") ?: 0L
+                val currentDownvotes = snapshot.getLong("downvotes") ?: 0L
+                val currentRating = snapshot.getLong("rating") ?: (currentUpvotes - currentDownvotes)
+                val previousVote = voteSnapshot.getLong("vote") ?: 0L
+                val newVote = if (isUpvote) 1L else -1L
+
+                if (previousVote == newVote) {
+                    return@runTransaction null
+                }
+
+                val upvoteDelta = when {
+                    previousVote == 1L -> -1L
+                    newVote == 1L -> 1L
+                    else -> 0L
+                }
+                val downvoteDelta = when {
+                    previousVote == -1L -> -1L
+                    newVote == -1L -> 1L
+                    else -> 0L
+                }
+                val ratingDelta = newVote - previousVote
+
+                transaction.set(voteRef, mapOf("vote" to newVote))
+                transaction.update(
+                    docRef,
+                    mapOf(
+                        "upvotes" to currentUpvotes + upvoteDelta,
+                        "downvotes" to currentDownvotes + downvoteDelta,
+                        "rating" to currentRating + ratingDelta
+                    )
+                )
+            }.await()
+        }.map { Unit }
+    }
+
     fun observeMessages(): Flow<Result<List<LocationMessage>>> = callbackFlow {
         val listener = messagesCollection
             .orderBy("createdAtEpochMs", Query.Direction.DESCENDING)
@@ -63,7 +110,10 @@ class MessageSyncRepository(
                         latitude = document.getDouble("latitude") ?: 0.0,
                         longitude = document.getDouble("longitude") ?: 0.0,
                         createdAtEpochMs = document.getLong("createdAtEpochMs") ?: 0L,
-                        authorId = document.getString("authorId").orEmpty()
+                        authorId = document.getString("authorId").orEmpty(),
+                        upvotes = document.getLong("upvotes") ?: 0L,
+                        downvotes = document.getLong("downvotes") ?: 0L,
+                        rating = document.getLong("rating") ?: 0L
                     )
                 }.orEmpty()
 
@@ -75,5 +125,6 @@ class MessageSyncRepository(
 
     companion object {
         private const val MESSAGES_COLLECTION = "messages"
+        private const val VOTES_COLLECTION = "votes"
     }
 }

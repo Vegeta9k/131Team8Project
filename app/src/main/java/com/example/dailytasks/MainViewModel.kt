@@ -43,6 +43,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _darkThemeEnabled = MutableStateFlow(loadDarkThemeEnabled())
     val darkThemeEnabled: StateFlow<Boolean> = _darkThemeEnabled.asStateFlow()
 
+    private val _profanityFilterEnabled = MutableStateFlow(loadProfanityFilterEnabled())
+    val profanityFilterEnabled: StateFlow<Boolean> = _profanityFilterEnabled.asStateFlow()
+
     val nearbyMessages = combine(messages, userLatLng) { allMessages, user ->
         if (user == null) {
             emptyList()
@@ -170,13 +173,63 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun upvoteMessage(message: LocationMessage) {
+        submitVote(message, isUpvote = true)
+    }
+
+    fun downvoteMessage(message: LocationMessage) {
+        submitVote(message, isUpvote = false)
+    }
+
     fun setDarkThemeEnabled(enabled: Boolean) {
         _darkThemeEnabled.value = enabled
         preferences.edit().putBoolean(KEY_DARK_THEME, enabled).apply()
     }
 
+    fun setProfanityFilterEnabled(enabled: Boolean) {
+        _profanityFilterEnabled.value = enabled
+        preferences.edit().putBoolean(KEY_PROFANITY_FILTER, enabled).apply()
+    }
+
+    fun displayMessageText(message: LocationMessage): String {
+        return if (_profanityFilterEnabled.value) {
+            filterProfanity(message.text)
+        } else {
+            message.text
+        }
+    }
+
     private fun loadDarkThemeEnabled(): Boolean {
         return preferences.getBoolean(KEY_DARK_THEME, false)
+    }
+
+    private fun loadProfanityFilterEnabled(): Boolean {
+        return preferences.getBoolean(KEY_PROFANITY_FILTER, false)
+    }
+
+    private fun filterProfanity(text: String): String {
+        var sanitized = text
+        PROFANITY_WORDS.forEach { word ->
+            val regex = Regex("\\b${Regex.escape(word)}\\b", RegexOption.IGNORE_CASE)
+            sanitized = sanitized.replace(regex, "****")
+        }
+        return sanitized
+    }
+
+    private fun submitVote(message: LocationMessage, isUpvote: Boolean) {
+        val repo = repository ?: run {
+            _syncError.value = "Firebase is not configured. Add app/google-services.json."
+            return
+        }
+        viewModelScope.launch {
+            repo.voteOnMessage(message.id, isUpvote)
+                .onSuccess {
+                    _syncError.value = null
+                }
+                .onFailure { throwable ->
+                    _syncError.value = throwable.message ?: "Message vote failed."
+                }
+        }
     }
 
     private fun distanceMeters(
@@ -194,5 +247,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         const val NEARBY_RADIUS_METERS = 150f
         private const val PREFS_NAME = "map_messages_preferences"
         private const val KEY_DARK_THEME = "dark_theme_enabled"
+        private const val KEY_PROFANITY_FILTER = "profanity_filter_enabled"
+        private val PROFANITY_WORDS = listOf(
+            "damn",
+            "hell",
+            "shit",
+            "fuck",
+            "bitch",
+            "asshole",
+            "bastard"
+        )
     }
 }

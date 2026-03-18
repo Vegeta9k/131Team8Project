@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = 'DailyTasksApp'
+rootProject.name = 'MapMessagesApp'
 include ':app'
