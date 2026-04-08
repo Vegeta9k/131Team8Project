@@ -11,32 +11,40 @@ Android app (Kotlin + Jetpack Compose + Google Maps + Firebase) where users can 
 - Live location updates using Fused Location Provider.
 
 ## Setup
-1. Open `d:\Curs\DailyTasksApp` in Android Studio.
-2. Create a Firebase project and Android app for package `com.example.dailytasks`.
-3. Download `google-services.json` from Firebase and place it in `app/google-services.json`.
-4. In Firebase console, enable:
-   - Authentication -> Sign-in method -> Anonymous
-   - Firestore Database
-5. Add your Google Maps API key to `local.properties`:
-   `MAPS_API_KEY=YOUR_API_KEY`
-6. Let Gradle sync.
-7. Run the `app` configuration on an emulator/device.
+After cloning the repo, the app still needs two local-only files before it will work fully:
+- `local.properties`
+- `app/google-services.json`
 
-## Collaborator setup
-Collaborators can clone the repository and run the app on their own emulator, but they still need local machine setup and access to the required services.
+Without these files:
+- The project cannot resolve the local Android SDK path.
+- Google Maps may not load.
+- Firebase auth and Firestore message sync will not work.
 
-1. Install Android Studio, the Android SDK, and create an emulator or connect a device.
-2. Create a local `local.properties` file with the correct SDK path and Maps key. Example:
+## Collaborator Setup
+Collaborators can clone the repository and run the app on their own emulator or device, but they must complete the local setup below first.
+
+1. Install Android Studio and the Android SDK, then create an emulator or connect a device.
+2. Open `d:\Curs\DailyTasksApp` in Android Studio.
+3. Create or update `local.properties` with the correct SDK path and Maps key. Example:
 ```properties
 sdk.dir=C\:\\Users\\YOUR_NAME\\AppData\\Local\\Android\\Sdk
 MAPS_API_KEY=YOUR_ANDROID_MAPS_KEY
 ```
-3. Add `google-services.json` to `app/google-services.json`.
-4. Use Firebase project settings for Android package `com.example.dailytasks`.
-5. Enable Firebase Authentication with the `Anonymous` provider.
-6. Enable Firestore Database in Native mode.
-7. Make sure the Google Maps API key has `Maps SDK for Android` enabled and billing active.
-8. If the Maps key is Android-restricted, add each collaborator's debug SHA-1 for package `com.example.dailytasks`.
+4. Add `google-services.json` to `app/google-services.json`.
+5. In Firebase, use an Android app with package name `com.example.dailytasks`.
+6. Enable Firebase Authentication with the `Anonymous` provider.
+7. Enable Firestore Database in Native mode.
+8. Make sure the Google Maps API key has `Maps SDK for Android` enabled and billing active.
+9. If the Maps key is Android-restricted, add each collaborator's debug SHA-1 for package `com.example.dailytasks`.
+10. Let Gradle sync, then run the `app` configuration.
+
+## Quick Troubleshooting
+- `Firebase is not configured. Add app/google-services.json.`:
+  `app/google-services.json` is missing, in the wrong folder, or from the wrong Firebase project.
+- Map is blank:
+  `MAPS_API_KEY` is missing, invalid, or the debug SHA-1 is not registered for that collaborator.
+- Gradle cannot find the SDK:
+  `local.properties` is missing or `sdk.dir` points to the wrong location.
 
 ## Debug SHA-1
 Each collaborator usually has a different debug keystore, so each person may need to register their own SHA-1 fingerprint in Google Cloud Console for the Android-restricted Maps key.
