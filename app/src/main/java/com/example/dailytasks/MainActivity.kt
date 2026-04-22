@@ -11,13 +11,18 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
@@ -34,11 +39,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -123,9 +128,10 @@ private fun LocationMessagesScreen(
     var permissionsGranted by remember { mutableStateOf(hasLocationPermission(context)) }
     val cameraPositionState = rememberCameraPositionState()
     var hasCenteredOnUser by remember { mutableStateOf(false) }
-    val expandedNearbyMessages = remember { mutableStateMapOf<String, Boolean>() }
-    var openMessageId by remember { mutableStateOf<String?>(null) }
+    var popupMessageId by remember { mutableStateOf<String?>(null) }
+    var isWritingMessage by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
+    val popupMessage = messages.firstOrNull { it.id == popupMessageId }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -157,123 +163,178 @@ private fun LocationMessagesScreen(
         LocationUpdatesEffect(onLocationUpdate = viewModel::updateUserLocation)
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            TextButton(onClick = onOpenMyMessages) {
-                Text("Your messages")
-            }
-            TextButton(onClick = onOpenSettings) {
-                Text("Settings")
-            }
-        }
-
-        Text("Tap map to choose where to place a message", style = MaterialTheme.typography.titleMedium)
-        Text(
-            text = if (isSignedIn) "Cloud sync connected" else "Connecting to cloud sync...",
-            style = MaterialTheme.typography.bodySmall
-        )
-        if (!syncError.isNullOrBlank()) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = syncError ?: "",
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.weight(1f)
-                )
-                TextButton(onClick = viewModel::clearSyncError) {
-                    Text("Dismiss")
-                }
-            }
-        }
-
+    Box(modifier = Modifier.fillMaxSize()) {
         MapSection(
+            modifier = Modifier.fillMaxSize(),
             cameraPositionState = cameraPositionState,
             messages = messages,
             selectedLatLng = selectedLatLng,
             nearbyMessageIds = nearbyMessages.map { it.id }.toSet(),
-            highlightedMessageId = openMessageId,
+            highlightedMessageId = popupMessageId,
             isMyLocationEnabled = permissionsGranted,
-            onMapClick = viewModel::updateSelectedLocation
+            onMapClick = {
+                popupMessageId = null
+                if (isWritingMessage) {
+                    viewModel.updateSelectedLocation(it)
+                }
+            },
+            onMarkerClick = { message ->
+                popupMessageId = message.id
+                coroutineScope.launch {
+                    cameraPositionState.animate(
+                        CameraUpdateFactory.newLatLngZoom(
+                            LatLng(message.latitude, message.longitude),
+                            17f
+                        )
+                    )
+                }
+            }
         )
 
-        OutlinedTextField(
-            value = draftText,
-            onValueChange = viewModel::updateDraftText,
-            label = { Text("Message") },
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(
-                onClick = viewModel::saveMessage,
-                enabled = draftText.isNotBlank() && (selectedLatLng != null || userLatLng != null)
+        Column(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .padding(WindowInsets.statusBars.asPaddingValues())
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                tonalElevation = 6.dp,
+                shadowElevation = 6.dp
             ) {
-                Text("Save message")
-            }
-            Button(onClick = viewModel::clearSelectedLocation) {
-                Text("Clear selection")
-            }
-        }
-
-        Text(
-            text = "Nearby messages (within ${MainViewModel.NEARBY_RADIUS_METERS.toInt()}m)",
-            style = MaterialTheme.typography.titleSmall
-        )
-
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(nearbyMessages, key = { it.id }) { message ->
-                val isExpanded = expandedNearbyMessages[message.id] == true
-                Card(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable {
-                            val shouldExpand = !isExpanded
-                            expandedNearbyMessages[message.id] = shouldExpand
-                            if (shouldExpand) {
-                                openMessageId = message.id
-                                coroutineScope.launch {
-                                    cameraPositionState.animate(
-                                        CameraUpdateFactory.newLatLngZoom(
-                                            LatLng(message.latitude, message.longitude),
-                                            17f
-                                        )
-                                    )
-                                }
-                            } else if (openMessageId == message.id) {
-                                openMessageId = null
-                            }
-                        }
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(
-                            text = "Points: ${message.displayedPoints}",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        if (isExpanded) {
-                            Text(viewModel.displayMessageText(message), style = MaterialTheme.typography.bodyLarge)
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Button(onClick = { viewModel.upvoteMessage(message) }) {
-                                    Text("Upvote")
-                                }
-                                Button(onClick = { viewModel.downvoteMessage(message) }) {
-                                    Text("Downvote")
-                                }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        TextButton(onClick = onOpenMyMessages) {
+                            Text("Your messages")
+                        }
+                        TextButton(onClick = onOpenSettings) {
+                            Text("Settings")
+                        }
+                    }
+                    Text("Explore the map freely, then press Write message when you're ready.", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = if (isSignedIn) "Cloud sync connected" else "Connecting to cloud sync...",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    if (!syncError.isNullOrBlank()) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                text = syncError ?: "",
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.weight(1f)
+                            )
+                            TextButton(onClick = viewModel::clearSyncError) {
+                                Text("Dismiss")
                             }
-                            Text("Tap to hide", style = MaterialTheme.typography.bodySmall)
-                        } else {
-                            Text("Hidden message", style = MaterialTheme.typography.bodyLarge)
-                            Text("Tap to open", style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
             }
+        }
+
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            popupMessage?.let { message ->
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            if (popupMessageId == message.id) {
+                                popupMessageId = null
+                            }
+                        }
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "Points: ${message.displayedPoints}",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Text(viewModel.displayMessageText(message), style = MaterialTheme.typography.bodyLarge)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = { viewModel.upvoteMessage(message) }) {
+                                Text("Upvote")
+                            }
+                            Button(onClick = { viewModel.downvoteMessage(message) }) {
+                                Text("Downvote")
+                            }
+                        }
+                        Text("Tap card to close", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (!isWritingMessage) {
+                        Button(
+                            onClick = {
+                                popupMessageId = null
+                                isWritingMessage = true
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Write message")
+                        }
+                    } else {
+                        Text(
+                            text = if (selectedLatLng == null) {
+                                "Tap the map to choose where to place your message."
+                            } else {
+                                "Location selected. Add your message and save it."
+                            },
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+
+                        OutlinedTextField(
+                            value = draftText,
+                            onValueChange = viewModel::updateDraftText,
+                            label = { Text("Message") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = {
+                                    viewModel.saveMessage()
+                                    isWritingMessage = false
+                                },
+                                enabled = draftText.isNotBlank() && selectedLatLng != null
+                            ) {
+                                Text("Save message")
+                            }
+                            Button(
+                                onClick = {
+                                    viewModel.clearSelectedLocation()
+                                    isWritingMessage = false
+                                }
+                            ) {
+                                Text("Cancel")
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
         }
     }
 }
@@ -380,18 +441,18 @@ private fun SettingsScreen(
 
 @Composable
 private fun MapSection(
+    modifier: Modifier = Modifier,
     cameraPositionState: CameraPositionState,
     messages: List<LocationMessage>,
     selectedLatLng: LatLng?,
     nearbyMessageIds: Set<String>,
     highlightedMessageId: String?,
     isMyLocationEnabled: Boolean,
-    onMapClick: (LatLng) -> Unit
+    onMapClick: (LatLng) -> Unit,
+    onMarkerClick: (LocationMessage) -> Unit
 ) {
     GoogleMap(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(320.dp),
+        modifier = modifier,
         cameraPositionState = cameraPositionState,
         properties = MapProperties(isMyLocationEnabled = isMyLocationEnabled),
         onMapClick = onMapClick
@@ -408,7 +469,11 @@ private fun MapSection(
                     } else {
                         BitmapDescriptorFactory.HUE_RED
                     }
-                )
+                ),
+                onClick = {
+                    onMarkerClick(message)
+                    true
+                }
             )
         }
         selectedLatLng?.let {
