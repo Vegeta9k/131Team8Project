@@ -12,5 +12,5 @@ data class LocationMessage(
     val rating: Long = 0L
 ) {
     val displayedPoints: Long
-        get() = rating.coerceAtLeast(0L)
+        get() = rating
 }

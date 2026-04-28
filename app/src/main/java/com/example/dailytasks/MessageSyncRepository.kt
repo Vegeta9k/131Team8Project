@@ -59,6 +59,10 @@ class MessageSyncRepository(
                 val voteRef = docRef.collection(VOTES_COLLECTION).document(uid)
                 val snapshot = transaction.get(docRef)
                 val voteSnapshot = transaction.get(voteRef)
+                if (!snapshot.exists()) {
+                    return@runTransaction null
+                }
+
                 val currentUpvotes = snapshot.getLong("upvotes") ?: 0L
                 val currentDownvotes = snapshot.getLong("downvotes") ?: 0L
                 val currentRating = snapshot.getLong("rating") ?: (currentUpvotes - currentDownvotes)
@@ -80,16 +84,21 @@ class MessageSyncRepository(
                     else -> 0L
                 }
                 val ratingDelta = newVote - previousVote
+                val updatedRating = currentRating + ratingDelta
 
-                transaction.set(voteRef, mapOf("vote" to newVote))
-                transaction.update(
-                    docRef,
-                    mapOf(
-                        "upvotes" to currentUpvotes + upvoteDelta,
-                        "downvotes" to currentDownvotes + downvoteDelta,
-                        "rating" to currentRating + ratingDelta
+                if (updatedRating < AUTO_DELETE_RATING_THRESHOLD) {
+                    transaction.delete(docRef)
+                } else {
+                    transaction.set(voteRef, mapOf("vote" to newVote))
+                    transaction.update(
+                        docRef,
+                        mapOf(
+                            "upvotes" to currentUpvotes + upvoteDelta,
+                            "downvotes" to currentDownvotes + downvoteDelta,
+                            "rating" to updatedRating
+                        )
                     )
-                )
+                }
             }.await()
         }.map { Unit }
     }
@@ -126,5 +135,6 @@ class MessageSyncRepository(
     companion object {
         private const val MESSAGES_COLLECTION = "messages"
         private const val VOTES_COLLECTION = "votes"
+        private const val AUTO_DELETE_RATING_THRESHOLD = -2L
     }
 }
