@@ -33,14 +33,17 @@ MAPS_API_KEY=YOUR_ANDROID_MAPS_KEY
 4. Add `google-services.json` to `app/google-services.json`.
 5. In Firebase, use an Android app with package name `com.example.dailytasks`.
 6. Enable Firebase Authentication with the `Anonymous` provider.
-7. Enable Firestore Database in Native mode.
-8. Make sure the Google Maps API key has `Maps SDK for Android` enabled and billing active.
-9. If the Maps key is Android-restricted, add each collaborator's debug SHA-1 for package `com.example.dailytasks`.
-10. Let Gradle sync, then run the `app` configuration.
+7. If you want the Register and Log in buttons to work, also enable the `Email/Password` provider in Firebase Authentication.
+8. Enable Firestore Database in Native mode.
+9. Make sure the Google Maps API key has `Maps SDK for Android` enabled and billing active.
+10. If the Maps key is Android-restricted, add each collaborator's debug SHA-1 for package `com.example.dailytasks`.
+11. Let Gradle sync, then run the `app` configuration.
 
 ## Quick Troubleshooting
 - `Firebase is not configured. Add app/google-services.json.`:
   `app/google-services.json` is missing, in the wrong folder, or from the wrong Firebase project.
+- Registration says email/password sign-in is not enabled:
+  In Firebase Console, go to `Authentication` > `Sign-in method` and enable `Email/Password`.
 - Map is blank:
   `MAPS_API_KEY` is missing, invalid, or the debug SHA-1 is not registered for that collaborator.
 - Gradle cannot find the SDK:

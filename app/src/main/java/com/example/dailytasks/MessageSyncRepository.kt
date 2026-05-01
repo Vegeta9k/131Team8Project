@@ -1,6 +1,7 @@
 package com.example.dailytasks
 
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import kotlinx.coroutines.channels.awaitClose
@@ -26,10 +27,15 @@ class MessageSyncRepository(
         val trimmed = email.trim()
         if (trimmed.isBlank()) return Result.failure(IllegalArgumentException("Enter an email address."))
         if (password.isBlank()) return Result.failure(IllegalArgumentException("Enter a password."))
+        if (password.length < MIN_PASSWORD_LENGTH) {
+            return Result.failure(
+                IllegalArgumentException("Password must be at least $MIN_PASSWORD_LENGTH characters.")
+            )
+        }
         return runCatching {
             val result = auth.createUserWithEmailAndPassword(trimmed, password).await()
             result.user?.uid ?: error("Registration failed.")
-        }
+        }.mapError(::toFriendlyAuthError)
     }
 
     suspend fun signInWithEmailPassword(email: String, password: String): Result<String> {
@@ -39,7 +45,7 @@ class MessageSyncRepository(
         return runCatching {
             val result = auth.signInWithEmailAndPassword(trimmed, password).await()
             result.user?.uid ?: error("Sign-in failed.")
-        }
+        }.mapError(::toFriendlyAuthError)
     }
 
     fun signOut() {
@@ -162,5 +168,31 @@ class MessageSyncRepository(
         private const val MESSAGES_COLLECTION = "messages"
         private const val VOTES_COLLECTION = "votes"
         private const val AUTO_DELETE_RATING_THRESHOLD = -2L
+        private const val MIN_PASSWORD_LENGTH = 6
+    }
+
+    private fun toFriendlyAuthError(throwable: Throwable): Throwable {
+        val authErrorCode = (throwable as? FirebaseAuthException)?.errorCode
+        return when (authErrorCode) {
+            "ERROR_OPERATION_NOT_ALLOWED" -> IllegalStateException(
+                "Email/password sign-in is not enabled in Firebase. Turn on Authentication > Sign-in method > Email/Password."
+            )
+            "ERROR_INVALID_EMAIL" -> IllegalArgumentException("Enter a valid email address.")
+            "ERROR_EMAIL_ALREADY_IN_USE" -> IllegalStateException("That email is already registered. Try logging in instead.")
+            "ERROR_WEAK_PASSWORD" -> IllegalArgumentException(
+                "Password must be at least $MIN_PASSWORD_LENGTH characters."
+            )
+            "ERROR_USER_NOT_FOUND",
+            "ERROR_WRONG_PASSWORD",
+            "ERROR_INVALID_CREDENTIAL" -> IllegalArgumentException("Incorrect email or password.")
+            else -> throwable
+        }
+    }
+
+    private inline fun <T> Result<T>.mapError(transform: (Throwable) -> Throwable): Result<T> {
+        return fold(
+            onSuccess = { Result.success(it) },
+            onFailure = { Result.failure(transform(it)) }
+        )
     }
 }
