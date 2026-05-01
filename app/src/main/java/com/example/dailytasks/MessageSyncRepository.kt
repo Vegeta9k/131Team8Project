@@ -20,6 +20,26 @@ class MessageSyncRepository(
         return result.user?.uid ?: error("Anonymous authentication failed.")
     }
 
+    suspend fun registerWithEmailPassword(email: String, password: String): Result<String> {
+        val trimmed = email.trim()
+        if (trimmed.isBlank()) return Result.failure(IllegalArgumentException("Enter an email address."))
+        if (password.isBlank()) return Result.failure(IllegalArgumentException("Enter a password."))
+        return runCatching {
+            val result = auth.createUserWithEmailAndPassword(trimmed, password).await()
+            result.user?.uid ?: error("Registration failed.")
+        }
+    }
+
+    suspend fun signInWithEmailPassword(email: String, password: String): Result<String> {
+        val trimmed = email.trim()
+        if (trimmed.isBlank()) return Result.failure(IllegalArgumentException("Enter an email address."))
+        if (password.isBlank()) return Result.failure(IllegalArgumentException("Enter a password."))
+        return runCatching {
+            val result = auth.signInWithEmailAndPassword(trimmed, password).await()
+            result.user?.uid ?: error("Sign-in failed.")
+        }
+    }
+
     suspend fun addMessage(text: String, latitude: Double, longitude: Double): Result<Unit> {
         val uid = runCatching { ensureSignedIn() }.getOrElse { return Result.failure(it) }
         val payload = mapOf(
