@@ -84,7 +84,10 @@ class MainActivity : ComponentActivity() {
                             onGuestContinue = { enteredMainApp = true }
                         )
                     } else {
-                        AppScreen(viewModel = viewModel)
+                        AppScreen(
+                            viewModel = viewModel,
+                            onLogout = { enteredMainApp = false }
+                        )
                     }
                 }
             }
@@ -212,7 +215,10 @@ private fun LoginScreen(
 }
 
 @Composable
-private fun AppScreen(viewModel: MainViewModel) {
+private fun AppScreen(
+    viewModel: MainViewModel,
+    onLogout: () -> Unit
+) {
     var destination by remember { mutableStateOf(AppDestination.MAIN) }
 
     when (destination) {
@@ -229,6 +235,10 @@ private fun AppScreen(viewModel: MainViewModel) {
                 profanityFilterEnabled = viewModel.profanityFilterEnabled.collectAsStateWithLifecycle().value,
                 onThemeChanged = viewModel::setDarkThemeEnabled,
                 onProfanityFilterChanged = viewModel::setProfanityFilterEnabled,
+                onLogout = {
+                    viewModel.signOut()
+                    onLogout()
+                },
                 onBack = { destination = AppDestination.MAIN }
             )
         }
@@ -254,6 +264,7 @@ private fun LocationMessagesScreen(
     val selectedLatLng by viewModel.selectedLatLng.collectAsStateWithLifecycle()
     val userLatLng by viewModel.userLatLng.collectAsStateWithLifecycle()
     val isSignedIn by viewModel.isSignedIn.collectAsStateWithLifecycle()
+    val isGuest by viewModel.isGuest.collectAsStateWithLifecycle()
     val syncError by viewModel.syncError.collectAsStateWithLifecycle()
     var permissionsGranted by remember { mutableStateOf(hasLocationPermission(context)) }
     val cameraPositionState = rememberCameraPositionState()
@@ -342,8 +353,16 @@ private fun LocationMessagesScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        TextButton(onClick = onOpenMyMessages) {
-                            Text("Your messages")
+                        if (!isGuest) {
+                            TextButton(onClick = onOpenMyMessages) {
+                                Text("Your messages")
+                            }
+                        } else {
+                            Text(
+                                text = "Guest mode",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                         TextButton(onClick = onOpenSettings) {
                             Text("Settings")
@@ -354,6 +373,13 @@ private fun LocationMessagesScreen(
                         text = if (isSignedIn) "Cloud sync connected" else "Connecting to cloud sync...",
                         style = MaterialTheme.typography.bodySmall
                     )
+                    if (isGuest) {
+                        Text(
+                            text = "Guests can browse, but can’t write messages or vote.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     if (!syncError.isNullOrBlank()) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(
@@ -397,10 +423,16 @@ private fun LocationMessagesScreen(
                         )
                         Text(viewModel.displayMessageText(message), style = MaterialTheme.typography.bodyLarge)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = { viewModel.upvoteMessage(message) }) {
+                            Button(
+                                onClick = { viewModel.upvoteMessage(message) },
+                                enabled = !isGuest
+                            ) {
                                 Text("Upvote")
                             }
-                            Button(onClick = { viewModel.downvoteMessage(message) }) {
+                            Button(
+                                onClick = { viewModel.downvoteMessage(message) },
+                                enabled = !isGuest
+                            ) {
                                 Text("Downvote")
                             }
                         }
@@ -420,6 +452,7 @@ private fun LocationMessagesScreen(
                                 popupMessageId = null
                                 isWritingMessage = true
                             },
+                            enabled = !isGuest,
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text("Write message")
@@ -447,7 +480,7 @@ private fun LocationMessagesScreen(
                                     viewModel.saveMessage()
                                     isWritingMessage = false
                                 },
-                                enabled = draftText.isNotBlank() && selectedLatLng != null
+                                enabled = !isGuest && draftText.isNotBlank() && selectedLatLng != null
                             ) {
                                 Text("Save message")
                             }
@@ -475,6 +508,7 @@ private fun MyMessagesScreen(
     onBack: () -> Unit
 ) {
     val myMessages by viewModel.myMessages.collectAsStateWithLifecycle()
+    val isGuest by viewModel.isGuest.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier
@@ -502,15 +536,24 @@ private fun MyMessagesScreen(
                         )
                         Text(viewModel.displayMessageText(message), style = MaterialTheme.typography.bodyLarge)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = { viewModel.upvoteMessage(message) }) {
+                            Button(
+                                onClick = { viewModel.upvoteMessage(message) },
+                                enabled = !isGuest
+                            ) {
                                 Text("Upvote")
                             }
-                            Button(onClick = { viewModel.downvoteMessage(message) }) {
+                            Button(
+                                onClick = { viewModel.downvoteMessage(message) },
+                                enabled = !isGuest
+                            ) {
                                 Text("Downvote")
                             }
                         }
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                            TextButton(onClick = { viewModel.deleteMessage(message) }) {
+                            TextButton(
+                                onClick = { viewModel.deleteMessage(message) },
+                                enabled = !isGuest
+                            ) {
                                 Text("Delete")
                             }
                         }
@@ -527,6 +570,7 @@ private fun SettingsScreen(
     profanityFilterEnabled: Boolean,
     onThemeChanged: (Boolean) -> Unit,
     onProfanityFilterChanged: (Boolean) -> Unit,
+    onLogout: () -> Unit,
     onBack: () -> Unit
 ) {
     Column(
@@ -565,6 +609,14 @@ private fun SettingsScreen(
                 checked = profanityFilterEnabled,
                 onCheckedChange = onProfanityFilterChanged
             )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+        Button(
+            onClick = onLogout,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Log out")
         }
     }
 }
