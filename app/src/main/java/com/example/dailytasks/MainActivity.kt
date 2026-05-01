@@ -12,6 +12,9 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -44,6 +47,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -94,26 +99,91 @@ private fun LoginScreen(
 ) {
     val syncError by viewModel.syncError.collectAsStateWithLifecycle()
     var isBusy by remember { mutableStateOf(false) }
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .statusBarsPadding()
             .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        Spacer(modifier = Modifier.height(24.dp))
         Text(
             text = "Map Messages",
             style = MaterialTheme.typography.headlineMedium
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Continue as a guest to explore the map and sync messages.",
+            text = "Create an account, sign in, or continue as a guest.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(24.dp))
+
+        OutlinedTextField(
+            value = email,
+            onValueChange = {
+                email = it
+                viewModel.clearSyncError()
+            },
+            label = { Text("Email") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        OutlinedTextField(
+            value = password,
+            onValueChange = {
+                password = it
+                viewModel.clearSyncError()
+            },
+            label = { Text("Password") },
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Button(
+                onClick = {
+                    if (isBusy) return@Button
+                    isBusy = true
+                    viewModel.registerWithEmailPassword(email, password) { ok ->
+                        isBusy = false
+                        if (ok) onGuestContinue()
+                    }
+                },
+                enabled = !isBusy,
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("Register")
+            }
+            Button(
+                onClick = {
+                    if (isBusy) return@Button
+                    isBusy = true
+                    viewModel.signInWithEmailPassword(email, password) { ok ->
+                        isBusy = false
+                        if (ok) onGuestContinue()
+                    }
+                },
+                enabled = !isBusy,
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("Log in")
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
         Button(
             onClick = {
                 if (isBusy) return@Button
@@ -126,8 +196,9 @@ private fun LoginScreen(
             enabled = !isBusy,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(if (isBusy) "Signing in…" else "Guest login")
+            Text(if (isBusy) "Please wait…" else "Guest login")
         }
+
         if (!syncError.isNullOrBlank()) {
             Spacer(modifier = Modifier.height(16.dp))
             Text(
@@ -136,6 +207,7 @@ private fun LoginScreen(
                 color = MaterialTheme.colorScheme.error
             )
         }
+        Spacer(modifier = Modifier.height(24.dp))
     }
 }
 
