@@ -70,11 +70,71 @@ class MainActivity : ComponentActivity() {
         setContent {
             val viewModel: MainViewModel = viewModel()
             val darkThemeEnabled by viewModel.darkThemeEnabled.collectAsStateWithLifecycle()
+            var enteredMainApp by remember { mutableStateOf(false) }
             MaterialTheme(colorScheme = if (darkThemeEnabled) darkColorScheme() else lightColorScheme()) {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    AppScreen(viewModel = viewModel)
+                    if (!enteredMainApp) {
+                        LoginScreen(
+                            viewModel = viewModel,
+                            onGuestContinue = { enteredMainApp = true }
+                        )
+                    } else {
+                        AppScreen(viewModel = viewModel)
+                    }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun LoginScreen(
+    viewModel: MainViewModel,
+    onGuestContinue: () -> Unit
+) {
+    val syncError by viewModel.syncError.collectAsStateWithLifecycle()
+    var isBusy by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "Map Messages",
+            style = MaterialTheme.typography.headlineMedium
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "Continue as a guest to explore the map and sync messages.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(32.dp))
+        Button(
+            onClick = {
+                if (isBusy) return@Button
+                isBusy = true
+                viewModel.signInAsGuest { ok ->
+                    isBusy = false
+                    if (ok) onGuestContinue()
+                }
+            },
+            enabled = !isBusy,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(if (isBusy) "Signing in…" else "Guest login")
+        }
+        if (!syncError.isNullOrBlank()) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = syncError.orEmpty(),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error
+            )
         }
     }
 }
