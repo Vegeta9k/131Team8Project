@@ -34,6 +34,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _isSignedIn = MutableStateFlow(false)
     val isSignedIn: StateFlow<Boolean> = _isSignedIn.asStateFlow()
 
+    private val _isGuest = MutableStateFlow(false)
+    val isGuest: StateFlow<Boolean> = _isGuest.asStateFlow()
+
     private val _currentUserId = MutableStateFlow<String?>(null)
     val currentUserId: StateFlow<String?> = _currentUserId.asStateFlow()
 
@@ -96,6 +99,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val repo = repository
         if (repo == null) {
             _isSignedIn.value = false
+            _isGuest.value = true
             _currentUserId.value = null
             onFinished(true)
             return
@@ -105,12 +109,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             runCatching { repo.ensureSignedIn() }
                 .onSuccess { uid ->
                     _isSignedIn.value = true
+                    _isGuest.value = repo.isGuestUser()
                     _currentUserId.value = uid
                     _syncError.value = null
                     onFinished(true)
                 }
                 .onFailure {
                     _isSignedIn.value = false
+                    _isGuest.value = false
                     _currentUserId.value = null
                     _syncError.value = it.message ?: "Authentication failed."
                     onFinished(false)
@@ -130,12 +136,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             repo.registerWithEmailPassword(email, password)
                 .onSuccess { uid ->
                     _isSignedIn.value = true
+                    _isGuest.value = false
                     _currentUserId.value = uid
                     _syncError.value = null
                     onFinished(true)
                 }
                 .onFailure { e ->
                     _isSignedIn.value = false
+                    _isGuest.value = false
                     _currentUserId.value = null
                     _syncError.value = e.message ?: "Could not create account."
                     onFinished(false)
@@ -155,17 +163,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             repo.signInWithEmailPassword(email, password)
                 .onSuccess { uid ->
                     _isSignedIn.value = true
+                    _isGuest.value = false
                     _currentUserId.value = uid
                     _syncError.value = null
                     onFinished(true)
                 }
                 .onFailure { e ->
                     _isSignedIn.value = false
+                    _isGuest.value = false
                     _currentUserId.value = null
                     _syncError.value = e.message ?: "Could not sign in."
                     onFinished(false)
                 }
         }
+    }
+
+    fun signOut() {
+        repository?.signOut()
+        _isSignedIn.value = false
+        _isGuest.value = false
+        _currentUserId.value = null
+        _selectedLatLng.value = null
+        _syncError.value = null
     }
 
     fun updateDraftText(value: String) {
@@ -185,6 +204,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun saveMessage() {
+        if (_isGuest.value) {
+            _syncError.value = "Guests can't write messages. Please register or log in."
+            return
+        }
         val repo = repository ?: run {
             _syncError.value = "Firebase is not configured. Add app/google-services.json."
             return
@@ -218,6 +241,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun deleteMessage(message: LocationMessage) {
+        if (_isGuest.value) {
+            _syncError.value = "Guests can't delete messages. Please register or log in."
+            return
+        }
         val repo = repository ?: run {
             _syncError.value = "Firebase is not configured. Add app/google-services.json."
             return
@@ -282,6 +309,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun submitVote(message: LocationMessage, isUpvote: Boolean) {
+        if (_isGuest.value) {
+            _syncError.value = "Guests can't vote. Please register or log in."
+            return
+        }
         val repo = repository ?: run {
             _syncError.value = "Firebase is not configured. Add app/google-services.json."
             return

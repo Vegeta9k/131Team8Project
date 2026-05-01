@@ -14,6 +14,8 @@ class MessageSyncRepository(
 ) {
     private val messagesCollection = firestore.collection(MESSAGES_COLLECTION)
 
+    fun isGuestUser(): Boolean = auth.currentUser?.isAnonymous == true
+
     suspend fun ensureSignedIn(): String {
         auth.currentUser?.uid?.let { return it }
         val result = auth.signInAnonymously().await()
@@ -38,6 +40,10 @@ class MessageSyncRepository(
             val result = auth.signInWithEmailAndPassword(trimmed, password).await()
             result.user?.uid ?: error("Sign-in failed.")
         }
+    }
+
+    fun signOut() {
+        auth.signOut()
     }
 
     suspend fun addMessage(text: String, latitude: Double, longitude: Double): Result<Unit> {
