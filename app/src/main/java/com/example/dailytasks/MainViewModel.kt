@@ -75,20 +75,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _syncError.value = "Firebase is not configured. Add app/google-services.json."
         } else {
             viewModelScope.launch {
-                runCatching { repo.ensureSignedIn() }
-                    .onSuccess { uid ->
-                        _isSignedIn.value = true
-                        _currentUserId.value = uid
-                        _syncError.value = null
-                    }
-                    .onFailure {
-                        _isSignedIn.value = false
-                        _currentUserId.value = null
-                        _syncError.value = it.message ?: "Authentication failed."
-                    }
-            }
-
-            viewModelScope.launch {
                 repo.observeMessages().collect { result ->
                     result
                         .onSuccess { cloudMessages ->
@@ -100,6 +86,85 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         }
                 }
             }
+        }
+    }
+
+    /**
+     * Signs in anonymously (guest). Call from the login screen before entering the main app.
+     */
+    fun signInAsGuest(onFinished: (Boolean) -> Unit) {
+        val repo = repository
+        if (repo == null) {
+            _isSignedIn.value = false
+            _currentUserId.value = null
+            onFinished(true)
+            return
+        }
+        viewModelScope.launch {
+            _syncError.value = null
+            runCatching { repo.ensureSignedIn() }
+                .onSuccess { uid ->
+                    _isSignedIn.value = true
+                    _currentUserId.value = uid
+                    _syncError.value = null
+                    onFinished(true)
+                }
+                .onFailure {
+                    _isSignedIn.value = false
+                    _currentUserId.value = null
+                    _syncError.value = it.message ?: "Authentication failed."
+                    onFinished(false)
+                }
+        }
+    }
+
+    fun registerWithEmailPassword(email: String, password: String, onFinished: (Boolean) -> Unit) {
+        val repo = repository
+        if (repo == null) {
+            _syncError.value = "Firebase is not configured. Add app/google-services.json."
+            onFinished(false)
+            return
+        }
+        viewModelScope.launch {
+            _syncError.value = null
+            repo.registerWithEmailPassword(email, password)
+                .onSuccess { uid ->
+                    _isSignedIn.value = true
+                    _currentUserId.value = uid
+                    _syncError.value = null
+                    onFinished(true)
+                }
+                .onFailure { e ->
+                    _isSignedIn.value = false
+                    _currentUserId.value = null
+                    _syncError.value = e.message ?: "Could not create account."
+                    onFinished(false)
+                }
+        }
+    }
+
+    fun signInWithEmailPassword(email: String, password: String, onFinished: (Boolean) -> Unit) {
+        val repo = repository
+        if (repo == null) {
+            _syncError.value = "Firebase is not configured. Add app/google-services.json."
+            onFinished(false)
+            return
+        }
+        viewModelScope.launch {
+            _syncError.value = null
+            repo.signInWithEmailPassword(email, password)
+                .onSuccess { uid ->
+                    _isSignedIn.value = true
+                    _currentUserId.value = uid
+                    _syncError.value = null
+                    onFinished(true)
+                }
+                .onFailure { e ->
+                    _isSignedIn.value = false
+                    _currentUserId.value = null
+                    _syncError.value = e.message ?: "Could not sign in."
+                    onFinished(false)
+                }
         }
     }
 
