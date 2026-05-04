@@ -15,6 +15,10 @@ class MessageSyncRepository(
 ) {
     private val messagesCollection = firestore.collection(MESSAGES_COLLECTION)
 
+    fun currentUserId(): String? = auth.currentUser?.uid
+
+    fun isSignedIn(): Boolean = auth.currentUser != null
+
     fun isGuestUser(): Boolean = auth.currentUser?.isAnonymous == true
 
     suspend fun ensureSignedIn(): String {
@@ -53,6 +57,11 @@ class MessageSyncRepository(
     }
 
     suspend fun addMessage(text: String, latitude: Double, longitude: Double): Result<Unit> {
+        if (isGuestUser()) {
+            return Result.failure(
+                IllegalStateException("Guests can't write messages. Please register or log in.")
+            )
+        }
         val uid = runCatching { ensureSignedIn() }.getOrElse { return Result.failure(it) }
         val payload = mapOf(
             "text" to text,
@@ -71,6 +80,11 @@ class MessageSyncRepository(
 
     suspend fun deleteMessage(messageId: String): Result<Unit> {
         if (messageId.isBlank()) return Result.failure(IllegalArgumentException("Invalid message ID."))
+        if (isGuestUser()) {
+            return Result.failure(
+                IllegalStateException("Guests can't delete messages. Please register or log in.")
+            )
+        }
         val uid = runCatching { ensureSignedIn() }.getOrElse { return Result.failure(it) }
         return runCatching {
             val doc = messagesCollection.document(messageId).get().await()
@@ -84,6 +98,11 @@ class MessageSyncRepository(
 
     suspend fun voteOnMessage(messageId: String, isUpvote: Boolean): Result<Unit> {
         if (messageId.isBlank()) return Result.failure(IllegalArgumentException("Invalid message ID."))
+        if (isGuestUser()) {
+            return Result.failure(
+                IllegalStateException("Guests can't vote. Please register or log in.")
+            )
+        }
         val uid = runCatching { ensureSignedIn() }.getOrElse { return Result.failure(it) }
         return runCatching {
             firestore.runTransaction { transaction ->

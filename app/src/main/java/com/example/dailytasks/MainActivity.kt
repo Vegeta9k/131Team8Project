@@ -315,7 +315,7 @@ private fun LocationMessagesScreen(
             isMyLocationEnabled = permissionsGranted,
             onMapClick = {
                 popupMessageId = null
-                if (isWritingMessage) {
+                if (isWritingMessage && !isGuest) {
                     viewModel.updateSelectedLocation(it)
                 }
             },
@@ -375,7 +375,7 @@ private fun LocationMessagesScreen(
                     )
                     if (isGuest) {
                         Text(
-                            text = "Guests can browse, but can’t write messages or vote.",
+                            text = "Guests can browse the map only. Writing, voting, and deleting require an account.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -471,6 +471,7 @@ private fun LocationMessagesScreen(
                             value = draftText,
                             onValueChange = viewModel::updateDraftText,
                             label = { Text("Message") },
+                            enabled = !isGuest,
                             modifier = Modifier.fillMaxWidth()
                         )
 

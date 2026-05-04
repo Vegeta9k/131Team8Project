@@ -77,6 +77,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (repo == null) {
             _syncError.value = "Firebase is not configured. Add app/google-services.json."
         } else {
+            // Bootstrap from persisted Firebase session so "guest vs user" permissions are correct
+            // even after app restarts.
+            _isSignedIn.value = repo.isSignedIn()
+            _isGuest.value = repo.isGuestUser()
+            _currentUserId.value = repo.currentUserId()
             viewModelScope.launch {
                 repo.observeMessages().collect { result ->
                     result
