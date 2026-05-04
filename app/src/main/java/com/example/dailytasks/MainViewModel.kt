@@ -6,6 +6,7 @@ import android.location.Location
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.android.gms.maps.model.LatLng
+import java.util.Locale
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -18,6 +19,10 @@ import kotlinx.coroutines.launch
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = runCatching { MessageSyncRepository() }.getOrNull()
     private val preferences = application.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val profanityWords = application.resources
+        .getStringArray(R.array.profanity_filter_vocabulary)
+        .toList()
+    private val profanityPatterns = profanityWords.map(::buildProfanityPattern)
 
     private val _draftText = MutableStateFlow("")
     val draftText: StateFlow<String> = _draftText.asStateFlow()
@@ -37,6 +42,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _isGuest = MutableStateFlow(false)
     val isGuest: StateFlow<Boolean> = _isGuest.asStateFlow()
 
+    private val _authStateResolved = MutableStateFlow(false)
+    val authStateResolved: StateFlow<Boolean> = _authStateResolved.asStateFlow()
+
     private val _currentUserId = MutableStateFlow<String?>(null)
     val currentUserId: StateFlow<String?> = _currentUserId.asStateFlow()
 
@@ -48,6 +56,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _profanityFilterEnabled = MutableStateFlow(loadProfanityFilterEnabled())
     val profanityFilterEnabled: StateFlow<Boolean> = _profanityFilterEnabled.asStateFlow()
+
+    private val _profanityDisableWarningAcknowledged =
+        MutableStateFlow(loadProfanityDisableWarningAcknowledged())
+    val profanityDisableWarningAcknowledged: StateFlow<Boolean> =
+        _profanityDisableWarningAcknowledged.asStateFlow()
 
     val nearbyMessages = combine(messages, userLatLng) { allMessages, user ->
         if (user == null) {
@@ -76,12 +89,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val repo = repository
         if (repo == null) {
             _syncError.value = "Firebase is not configured. Add app/google-services.json."
+            _authStateResolved.value = true
         } else {
             // Bootstrap from persisted Firebase session so "guest vs user" permissions are correct
             // even after app restarts.
-            _isSignedIn.value = repo.isSignedIn()
-            _isGuest.value = repo.isGuestUser()
-            _currentUserId.value = repo.currentUserId()
+            restoreExistingSession(repo)
             viewModelScope.launch {
                 repo.observeMessages().collect { result ->
                     result
@@ -222,6 +234,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (text.isBlank()) return
 
         val destination = _selectedLatLng.value ?: _userLatLng.value ?: return
+        if (!canWriteAt(destination)) {
+            _syncError.value = "You can only write messages within 150m of your current location."
+            return
+        }
 
         viewModelScope.launch {
             repo
@@ -288,7 +304,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         preferences.edit().putBoolean(KEY_PROFANITY_FILTER, enabled).apply()
     }
 
+    fun acknowledgeProfanityDisableWarning() {
+        _profanityDisableWarningAcknowledged.value = true
+        preferences.edit().putBoolean(KEY_PROFANITY_DISABLE_WARNING_ACKNOWLEDGED, true).apply()
+    }
+
     fun displayMessageText(message: LocationMessage): String {
+        if (!canReadMessage(message)) {
+            return "Move within 150m to read this message."
+        }
         return if (_profanityFilterEnabled.value) {
             filterProfanity(message.text)
         } else {
@@ -296,26 +320,113 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun displayMyMessageText(message: LocationMessage): String {
+        return if (_profanityFilterEnabled.value) {
+            filterProfanity(message.text)
+        } else {
+            message.text
+        }
+    }
+
+    private fun restoreExistingSession(repo: MessageSyncRepository) {
+        val existingUid = repo.currentUserId()
+        _isSignedIn.value = !existingUid.isNullOrBlank()
+        _isGuest.value = repo.isGuestUser()
+        _currentUserId.value = existingUid
+        _authStateResolved.value = true
+    }
+
+    fun canReadMessage(message: LocationMessage): Boolean {
+        return isWithinNearbyRange(message.latitude, message.longitude)
+    }
+
+    fun canVoteOnMessage(message: LocationMessage): Boolean {
+        return canReadMessage(message)
+    }
+
+    fun canReadOwnMessage(message: LocationMessage): Boolean {
+        return message.authorId == _currentUserId.value || canReadMessage(message)
+    }
+
+    fun canVoteOnOwnMessage(message: LocationMessage): Boolean {
+        return message.authorId == _currentUserId.value || canVoteOnMessage(message)
+    }
+
+    fun canWriteSelectedMessage(): Boolean {
+        val destination = _selectedLatLng.value ?: return false
+        return canWriteAt(destination)
+    }
+
     private fun loadDarkThemeEnabled(): Boolean {
         return preferences.getBoolean(KEY_DARK_THEME, false)
     }
 
     private fun loadProfanityFilterEnabled(): Boolean {
-        return preferences.getBoolean(KEY_PROFANITY_FILTER, false)
+        return preferences.getBoolean(KEY_PROFANITY_FILTER, true)
+    }
+
+    private fun loadProfanityDisableWarningAcknowledged(): Boolean {
+        return preferences.getBoolean(KEY_PROFANITY_DISABLE_WARNING_ACKNOWLEDGED, false)
     }
 
     private fun filterProfanity(text: String): String {
         var sanitized = text
-        PROFANITY_WORDS.forEach { word ->
-            val regex = Regex("\\b${Regex.escape(word)}\\b", RegexOption.IGNORE_CASE)
-            sanitized = sanitized.replace(regex, "****")
+        profanityPatterns.forEach { pattern ->
+            sanitized = pattern.replace(sanitized) { matchResult ->
+                val lettersOnly = matchResult.value.count { it.isLetterOrDigit() }
+                "*".repeat(lettersOnly.coerceAtLeast(4))
+            }
         }
         return sanitized
+    }
+
+    private fun buildProfanityPattern(word: String): Regex {
+        val normalizedWord = normalizeForModeration(word)
+        val separator = "[\\W_]*"
+        val body = normalizedWord.map { char ->
+            val charPattern = when (char) {
+                'a' -> "[a4@]+"
+                'b' -> "[b8]+"
+                'e' -> "[e3]+"
+                'g' -> "[g69]+"
+                'i' -> "[i1!|l]+"
+                'l' -> "[l1!|i]+"
+                'o' -> "[o0]+"
+                's' -> "[s5$]+"
+                't' -> "[t7+]+"
+                'z' -> "[z2]+"
+                else -> Regex.escape(char.toString()) + "+"
+            }
+            "$charPattern$separator"
+        }.joinToString("")
+        return Regex("(?<![A-Za-z0-9])$body(?![A-Za-z0-9])", RegexOption.IGNORE_CASE)
+    }
+
+    private fun normalizeForModeration(text: String): String {
+        return text
+            .lowercase(Locale.US)
+            .replace("@", "a")
+            .replace("$", "s")
+            .replace("0", "o")
+            .replace("1", "i")
+            .replace("3", "e")
+            .replace("4", "a")
+            .replace("5", "s")
+            .replace("7", "t")
+            .replace("8", "b")
+            .replace("9", "g")
+            .replace(Regex("[^a-z\\s]"), "")
+            .replace(Regex("(.)\\1{2,}"), "$1")
+            .trim()
     }
 
     private fun submitVote(message: LocationMessage, isUpvote: Boolean) {
         if (_isGuest.value) {
             _syncError.value = "Guests can't vote. Please register or log in."
+            return
+        }
+        if (!canVoteOnMessage(message)) {
+            _syncError.value = "You can only vote on messages within 150m of your current location."
             return
         }
         val repo = repository ?: run {
@@ -331,6 +442,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _syncError.value = throwable.message ?: "Message vote failed."
                 }
         }
+    }
+
+    private fun canWriteAt(destination: LatLng): Boolean {
+        val user = _userLatLng.value ?: return false
+        return distanceMeters(
+            user.latitude,
+            user.longitude,
+            destination.latitude,
+            destination.longitude
+        ) <= NEARBY_RADIUS_METERS
+    }
+
+    private fun isWithinNearbyRange(latitude: Double, longitude: Double): Boolean {
+        val user = _userLatLng.value ?: return false
+        return distanceMeters(
+            user.latitude,
+            user.longitude,
+            latitude,
+            longitude
+        ) <= NEARBY_RADIUS_METERS
     }
 
     private fun distanceMeters(
@@ -349,14 +480,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         private const val PREFS_NAME = "map_messages_preferences"
         private const val KEY_DARK_THEME = "dark_theme_enabled"
         private const val KEY_PROFANITY_FILTER = "profanity_filter_enabled"
-        private val PROFANITY_WORDS = listOf(
-            "damn",
-            "hell",
-            "shit",
-            "fuck",
-            "bitch",
-            "asshole",
-            "bastard"
-        )
+        private const val KEY_PROFANITY_DISABLE_WARNING_ACKNOWLEDGED =
+            "profanity_disable_warning_acknowledged"
     }
 }

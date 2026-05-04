@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="profanity_filter_vocabulary">
+        <item>ass</item>
+        <item>asshat</item>
+        <item>asswipe</item>
+        <item>ballsack</item>
+        <item>bastard</item>
+        <item>damn</item>
+        <item>dick</item>
+        <item>dildo</item>
+        <item>fag</item>
+        <item>faggot</item>
+        <item>fuck</item>
+        <item>fucker</item>
+        <item>fucking</item>
+        <item>goddamn</item>
+        <item>hell</item>
+        <item>jackass</item>
+        <item>motherfucker</item>
+        <item>nigger</item>
+        <item>penis</item>
+        <item>piss</item>
+        <item>prick</item>
+        <item>pussy</item>
+        <item>rape</item>
+        <item>rapist</item>
+        <item>retard</item>
+        <item>shit</item>
+        <item>shitty</item>
+        <item>slut</item>
+        <item>tit</item>
+        <item>twat</item>
+        <item>vagina</item>
+        <item>bitch</item>
+        <item>asshole</item>
+        <item>whore</item>
+        <item>wtf</item>
+    </string-array>
+</resources>

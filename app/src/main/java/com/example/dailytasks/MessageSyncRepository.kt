@@ -137,7 +137,7 @@ class MessageSyncRepository(
                 val ratingDelta = newVote - previousVote
                 val updatedRating = currentRating + ratingDelta
 
-                if (updatedRating < AUTO_DELETE_RATING_THRESHOLD) {
+                if (updatedRating <= AUTO_DELETE_RATING_THRESHOLD) {
                     transaction.delete(docRef)
                 } else {
                     transaction.set(voteRef, mapOf("vote" to newVote))
