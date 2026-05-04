@@ -368,7 +368,7 @@ private fun LocationMessagesScreen(
                             Text("Settings")
                         }
                     }
-                    Text("Explore the map freely, then press Write message when you're ready.", style = MaterialTheme.typography.titleMedium)
+                    Text("Tap a pin on the map to see its message.", style = MaterialTheme.typography.titleMedium)
                     Text(
                         text = if (isSignedIn) "Cloud sync connected" else "Connecting to cloud sync...",
                         style = MaterialTheme.typography.bodySmall
