@@ -15,6 +15,8 @@ class MessageSyncRepository(
 ) {
     private val messagesCollection = firestore.collection(MESSAGES_COLLECTION)
 
+    fun currentUserId(): String? = auth.currentUser?.uid
+
     fun isGuestUser(): Boolean = auth.currentUser?.isAnonymous == true
 
     suspend fun ensureSignedIn(): String {

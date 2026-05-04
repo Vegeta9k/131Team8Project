@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -26,6 +27,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
@@ -42,7 +44,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,10 +65,10 @@ import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.CameraPositionState
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapProperties
+import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
-import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -75,18 +76,31 @@ class MainActivity : ComponentActivity() {
         setContent {
             val viewModel: MainViewModel = viewModel()
             val darkThemeEnabled by viewModel.darkThemeEnabled.collectAsStateWithLifecycle()
-            var enteredMainApp by remember { mutableStateOf(false) }
+            val authStateResolved by viewModel.authStateResolved.collectAsStateWithLifecycle()
+            val isSignedIn by viewModel.isSignedIn.collectAsStateWithLifecycle()
+            val isGuest by viewModel.isGuest.collectAsStateWithLifecycle()
+            val shouldEnterMainApp = isSignedIn || isGuest
             MaterialTheme(colorScheme = if (darkThemeEnabled) darkColorScheme() else lightColorScheme()) {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    if (!enteredMainApp) {
+                    if (!authStateResolved) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Loading...",
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+                    } else if (!shouldEnterMainApp) {
                         LoginScreen(
                             viewModel = viewModel,
-                            onGuestContinue = { enteredMainApp = true }
+                            onAuthenticated = {}
                         )
                     } else {
                         AppScreen(
                             viewModel = viewModel,
-                            onLogout = { enteredMainApp = false }
+                            onLogout = {}
                         )
                     }
                 }
@@ -98,12 +112,19 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun LoginScreen(
     viewModel: MainViewModel,
-    onGuestContinue: () -> Unit
+    onAuthenticated: () -> Unit
 ) {
     val syncError by viewModel.syncError.collectAsStateWithLifecycle()
+    var authDestination by remember { mutableStateOf(AuthDestination.HOME) }
     var isBusy by remember { mutableStateOf(false) }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
+
+    BackHandler(enabled = authDestination != AuthDestination.HOME) {
+        authDestination = AuthDestination.HOME
+        viewModel.clearSyncError()
+    }
 
     Column(
         modifier = Modifier
@@ -126,80 +147,172 @@ private fun LoginScreen(
         )
         Spacer(modifier = Modifier.height(24.dp))
 
-        OutlinedTextField(
-            value = email,
-            onValueChange = {
-                email = it
-                viewModel.clearSyncError()
-            },
-            label = { Text("Email") },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-        OutlinedTextField(
-            value = password,
-            onValueChange = {
-                password = it
-                viewModel.clearSyncError()
-            },
-            label = { Text("Password") },
-            singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(modifier = Modifier.height(20.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Button(
-                onClick = {
-                    if (isBusy) return@Button
-                    isBusy = true
-                    viewModel.registerWithEmailPassword(email, password) { ok ->
-                        isBusy = false
-                        if (ok) onGuestContinue()
-                    }
-                },
-                enabled = !isBusy,
-                modifier = Modifier.weight(1f)
-            ) {
-                Text("Register")
-            }
-            Button(
-                onClick = {
-                    if (isBusy) return@Button
-                    isBusy = true
-                    viewModel.signInWithEmailPassword(email, password) { ok ->
-                        isBusy = false
-                        if (ok) onGuestContinue()
-                    }
-                },
-                enabled = !isBusy,
-                modifier = Modifier.weight(1f)
-            ) {
-                Text("Log in")
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-        Button(
-            onClick = {
-                if (isBusy) return@Button
-                isBusy = true
-                viewModel.signInAsGuest { ok ->
-                    isBusy = false
-                    if (ok) onGuestContinue()
+        when (authDestination) {
+            AuthDestination.HOME -> {
+                Button(
+                    onClick = {
+                        viewModel.clearSyncError()
+                        authDestination = AuthDestination.REGISTER
+                    },
+                    enabled = !isBusy,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Register")
                 }
-            },
-            enabled = !isBusy,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(if (isBusy) "Please wait…" else "Guest login")
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(
+                    onClick = {
+                        viewModel.clearSyncError()
+                        authDestination = AuthDestination.LOGIN
+                    },
+                    enabled = !isBusy,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Log in")
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(
+                    onClick = {
+                        if (isBusy) return@Button
+                        isBusy = true
+                        viewModel.signInAsGuest { ok ->
+                            isBusy = false
+                            if (ok) onAuthenticated()
+                        }
+                    },
+                    enabled = !isBusy,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(if (isBusy) "Please wait..." else "Guest login")
+                }
+            }
+
+            AuthDestination.LOGIN -> {
+                TextButton(
+                    onClick = {
+                        viewModel.clearSyncError()
+                        authDestination = AuthDestination.HOME
+                    },
+                    enabled = !isBusy,
+                    modifier = Modifier.align(Alignment.Start)
+                ) {
+                    Text("Back")
+                }
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = {
+                        email = it
+                        viewModel.clearSyncError()
+                    },
+                    label = { Text("Email") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = {
+                        password = it
+                        viewModel.clearSyncError()
+                    },
+                    label = { Text("Password") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(20.dp))
+                Button(
+                    onClick = {
+                        if (isBusy) return@Button
+                        isBusy = true
+                        viewModel.signInWithEmailPassword(email, password) { ok ->
+                            isBusy = false
+                            if (ok) onAuthenticated()
+                        }
+                    },
+                    enabled = !isBusy && email.isNotBlank() && password.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(if (isBusy) "Please wait..." else "Log in")
+                }
+            }
+
+            AuthDestination.REGISTER -> {
+                val passwordsMatch = confirmPassword == password
+                TextButton(
+                    onClick = {
+                        viewModel.clearSyncError()
+                        authDestination = AuthDestination.HOME
+                    },
+                    enabled = !isBusy,
+                    modifier = Modifier.align(Alignment.Start)
+                ) {
+                    Text("Back")
+                }
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = {
+                        email = it
+                        viewModel.clearSyncError()
+                    },
+                    label = { Text("Email") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = {
+                        password = it
+                        viewModel.clearSyncError()
+                    },
+                    label = { Text("Password") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = confirmPassword,
+                    onValueChange = {
+                        confirmPassword = it
+                        viewModel.clearSyncError()
+                    },
+                    label = { Text("Confirm password") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (confirmPassword.isNotEmpty() && !passwordsMatch) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Passwords do not match.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.align(Alignment.Start)
+                    )
+                }
+                Spacer(modifier = Modifier.height(20.dp))
+                Button(
+                    onClick = {
+                        if (isBusy || !passwordsMatch) return@Button
+                        isBusy = true
+                        viewModel.registerWithEmailPassword(email, password) { ok ->
+                            isBusy = false
+                            if (ok) onAuthenticated()
+                        }
+                    },
+                    enabled = !isBusy && email.isNotBlank() && password.isNotBlank() && confirmPassword.isNotBlank() && passwordsMatch,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(if (isBusy) "Please wait..." else "Create account")
+                }
+            }
         }
 
         if (!syncError.isNullOrBlank()) {
@@ -233,8 +346,10 @@ private fun AppScreen(
             SettingsScreen(
                 darkThemeEnabled = viewModel.darkThemeEnabled.collectAsStateWithLifecycle().value,
                 profanityFilterEnabled = viewModel.profanityFilterEnabled.collectAsStateWithLifecycle().value,
+                profanityDisableWarningAcknowledged = viewModel.profanityDisableWarningAcknowledged.collectAsStateWithLifecycle().value,
                 onThemeChanged = viewModel::setDarkThemeEnabled,
                 onProfanityFilterChanged = viewModel::setProfanityFilterEnabled,
+                onAcknowledgeProfanityDisableWarning = viewModel::acknowledgeProfanityDisableWarning,
                 onLogout = {
                     viewModel.signOut()
                     onLogout()
@@ -268,10 +383,8 @@ private fun LocationMessagesScreen(
     val syncError by viewModel.syncError.collectAsStateWithLifecycle()
     var permissionsGranted by remember { mutableStateOf(hasLocationPermission(context)) }
     val cameraPositionState = rememberCameraPositionState()
-    var hasCenteredOnUser by remember { mutableStateOf(false) }
     var popupMessageId by remember { mutableStateOf<String?>(null) }
     var isWritingMessage by remember { mutableStateOf(false) }
-    val coroutineScope = rememberCoroutineScope()
     val popupMessage = messages.firstOrNull { it.id == popupMessageId }
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -294,10 +407,7 @@ private fun LocationMessagesScreen(
 
     LaunchedEffect(userLatLng) {
         val user = userLatLng ?: return@LaunchedEffect
-        if (!hasCenteredOnUser) {
-            cameraPositionState.animate(CameraUpdateFactory.newLatLngZoom(user, 16f))
-            hasCenteredOnUser = true
-        }
+        cameraPositionState.animate(CameraUpdateFactory.newLatLngZoom(user, 16f))
     }
 
     if (permissionsGranted) {
@@ -321,14 +431,6 @@ private fun LocationMessagesScreen(
             },
             onMarkerClick = { message ->
                 popupMessageId = message.id
-                coroutineScope.launch {
-                    cameraPositionState.animate(
-                        CameraUpdateFactory.newLatLngZoom(
-                            LatLng(message.latitude, message.longitude),
-                            17f
-                        )
-                    )
-                }
             }
         )
 
@@ -404,6 +506,8 @@ private fun LocationMessagesScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             popupMessage?.let { message ->
+                val canReadMessage = viewModel.canReadMessage(message)
+                val canVoteOnMessage = viewModel.canVoteOnMessage(message)
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -422,16 +526,23 @@ private fun LocationMessagesScreen(
                             style = MaterialTheme.typography.bodyMedium
                         )
                         Text(viewModel.displayMessageText(message), style = MaterialTheme.typography.bodyLarge)
+                        if (!canReadMessage) {
+                            Text(
+                                text = "Move within 150m of this pin to read and rate it.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(
                                 onClick = { viewModel.upvoteMessage(message) },
-                                enabled = !isGuest
+                                enabled = !isGuest && canVoteOnMessage
                             ) {
                                 Text("Upvote")
                             }
                             Button(
                                 onClick = { viewModel.downvoteMessage(message) },
-                                enabled = !isGuest
+                                enabled = !isGuest && canVoteOnMessage
                             ) {
                                 Text("Downvote")
                             }
@@ -458,14 +569,22 @@ private fun LocationMessagesScreen(
                             Text("Write message")
                         }
                     } else {
+                        val canWriteSelectedMessage = viewModel.canWriteSelectedMessage()
                         Text(
                             text = if (selectedLatLng == null) {
                                 "Tap the map to choose where to place your message."
                             } else {
-                                "Location selected. Add your message and save it."
+                                "Location selected. You can save only if it is within 150m of you."
                             },
                             style = MaterialTheme.typography.bodyMedium
                         )
+                        if (selectedLatLng != null && !canWriteSelectedMessage) {
+                            Text(
+                                text = "Move closer to the selected point before saving.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
 
                         OutlinedTextField(
                             value = draftText,
@@ -480,7 +599,7 @@ private fun LocationMessagesScreen(
                                     viewModel.saveMessage()
                                     isWritingMessage = false
                                 },
-                                enabled = !isGuest && draftText.isNotBlank() && selectedLatLng != null
+                                enabled = !isGuest && draftText.isNotBlank() && selectedLatLng != null && canWriteSelectedMessage
                             ) {
                                 Text("Save message")
                             }
@@ -507,12 +626,15 @@ private fun MyMessagesScreen(
     viewModel: MainViewModel = viewModel(),
     onBack: () -> Unit
 ) {
+    BackHandler(onBack = onBack)
+
     val myMessages by viewModel.myMessages.collectAsStateWithLifecycle()
     val isGuest by viewModel.isGuest.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .statusBarsPadding()
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
@@ -528,23 +650,32 @@ private fun MyMessagesScreen(
 
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(myMessages, key = { it.id }) { message ->
+                val canReadMessage = viewModel.canReadOwnMessage(message)
+                val canVoteOnMessage = viewModel.canVoteOnOwnMessage(message)
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(
                             text = "Points: ${message.displayedPoints}",
                             style = MaterialTheme.typography.bodyMedium
                         )
-                        Text(viewModel.displayMessageText(message), style = MaterialTheme.typography.bodyLarge)
+                        Text(viewModel.displayMyMessageText(message), style = MaterialTheme.typography.bodyLarge)
+                        if (!canReadMessage) {
+                            Text(
+                                text = "Move within 150m of this pin to read and rate it.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(
                                 onClick = { viewModel.upvoteMessage(message) },
-                                enabled = !isGuest
+                                enabled = !isGuest && canVoteOnMessage
                             ) {
                                 Text("Upvote")
                             }
                             Button(
                                 onClick = { viewModel.downvoteMessage(message) },
-                                enabled = !isGuest
+                                enabled = !isGuest && canVoteOnMessage
                             ) {
                                 Text("Downvote")
                             }
@@ -568,14 +699,20 @@ private fun MyMessagesScreen(
 private fun SettingsScreen(
     darkThemeEnabled: Boolean,
     profanityFilterEnabled: Boolean,
+    profanityDisableWarningAcknowledged: Boolean,
     onThemeChanged: (Boolean) -> Unit,
     onProfanityFilterChanged: (Boolean) -> Unit,
+    onAcknowledgeProfanityDisableWarning: () -> Unit,
     onLogout: () -> Unit,
     onBack: () -> Unit
 ) {
+    BackHandler(onBack = onBack)
+    var showProfanityDisableDialog by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .statusBarsPadding()
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -607,7 +744,15 @@ private fun SettingsScreen(
             Text("Profanity filter", style = MaterialTheme.typography.bodyLarge)
             Switch(
                 checked = profanityFilterEnabled,
-                onCheckedChange = onProfanityFilterChanged
+                onCheckedChange = { enabled ->
+                    if (enabled) {
+                        onProfanityFilterChanged(true)
+                    } else if (!profanityDisableWarningAcknowledged) {
+                        showProfanityDisableDialog = true
+                    } else {
+                        onProfanityFilterChanged(false)
+                    }
+                }
             )
         }
 
@@ -618,6 +763,32 @@ private fun SettingsScreen(
         ) {
             Text("Log out")
         }
+    }
+
+    if (showProfanityDisableDialog) {
+        AlertDialog(
+            onDismissRequest = { showProfanityDisableDialog = false },
+            title = { Text("Turn Off Profanity Filter?") },
+            text = {
+                Text("This may reveal offensive language in messages. Are you sure you want to turn the filter off?")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onAcknowledgeProfanityDisableWarning()
+                        onProfanityFilterChanged(false)
+                        showProfanityDisableDialog = false
+                    }
+                ) {
+                    Text("Turn off")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showProfanityDisableDialog = false }) {
+                    Text("Keep on")
+                }
+            }
+        )
     }
 }
 
@@ -633,10 +804,23 @@ private fun MapSection(
     onMapClick: (LatLng) -> Unit,
     onMarkerClick: (LocationMessage) -> Unit
 ) {
+    val lockedUiSettings = remember {
+        MapUiSettings(
+            scrollGesturesEnabled = false,
+            zoomGesturesEnabled = false,
+            tiltGesturesEnabled = false,
+            rotationGesturesEnabled = false,
+            zoomControlsEnabled = false,
+            myLocationButtonEnabled = false,
+            mapToolbarEnabled = false
+        )
+    }
+
     GoogleMap(
         modifier = modifier,
         cameraPositionState = cameraPositionState,
         properties = MapProperties(isMyLocationEnabled = isMyLocationEnabled),
+        uiSettings = lockedUiSettings,
         onMapClick = onMapClick
     ) {
         messages.forEach { message ->
@@ -668,6 +852,12 @@ private enum class AppDestination {
     MAIN,
     SETTINGS,
     MY_MESSAGES
+}
+
+private enum class AuthDestination {
+    HOME,
+    LOGIN,
+    REGISTER
 }
 
 @SuppressLint("MissingPermission")
