@@ -370,7 +370,11 @@ private fun LocationMessagesScreen(
                     }
                     Text("Tap a pin on the map to see its message.", style = MaterialTheme.typography.titleMedium)
                     Text(
-                        text = if (isSignedIn) "Cloud sync connected" else "Connecting to cloud sync...",
+                        text = if (isSignedIn && syncError.isNullOrBlank()) {
+                            "Cloud connected"
+                        } else {
+                            "Cloud not connected"
+                        },
                         style = MaterialTheme.typography.bodySmall
                     )
                     if (isGuest) {
