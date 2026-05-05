@@ -63,6 +63,7 @@ import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.maps.CameraUpdateFactory
+import com.google.android.gms.maps.MapsInitializer
 import com.google.android.gms.maps.model.BitmapDescriptor
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.LatLng
@@ -104,6 +105,8 @@ private fun bitmapDescriptorFromDrawable(
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Marker icons are created during composition, so initialize Maps first.
+        MapsInitializer.initialize(this)
         setContent {
             val viewModel: MainViewModel = viewModel()
             val darkThemeEnabled by viewModel.darkThemeEnabled.collectAsStateWithLifecycle()
@@ -454,6 +457,7 @@ private fun LocationMessagesScreen(
             cameraPositionState = cameraPositionState,
             messages = messages,
             selectedLatLng = selectedLatLng,
+            showMessageMarkers = !isWritingMessage,
             nearbyMessageIds = nearbyMessages.map { it.id }.toSet(),
             readMessageIds = readMessageIds,
             highlightedMessageId = popupMessageId,
@@ -854,6 +858,7 @@ private fun MapSection(
     cameraPositionState: CameraPositionState,
     messages: List<LocationMessage>,
     selectedLatLng: LatLng?,
+    showMessageMarkers: Boolean,
     nearbyMessageIds: Set<String>,
     readMessageIds: Set<String>,
     highlightedMessageId: String?,
@@ -865,10 +870,10 @@ private fun MapSection(
     val lockedUiSettings = remember {
         MapUiSettings(
             scrollGesturesEnabled = false,
-            zoomGesturesEnabled = false,
+            zoomGesturesEnabled = true,
             tiltGesturesEnabled = false,
             rotationGesturesEnabled = false,
-            zoomControlsEnabled = false,
+            zoomControlsEnabled = true,
             myLocationButtonEnabled = false,
             mapToolbarEnabled = false
         )
@@ -881,34 +886,36 @@ private fun MapSection(
         uiSettings = lockedUiSettings,
         onMapClick = onMapClick
     ) {
-        messages.forEach { message ->
-            val isNearby = nearbyMessageIds.contains(message.id)
-            val isHighlighted = message.id == highlightedMessageId
-            val markerTitle = if (isNearby) "Nearby" else "Message"
-            val hasBeenOpened = readMessageIds.contains(message.id)
-            val markerIcon = if (!isNearby) {
-                BitmapDescriptorFactory.defaultMarker(
-                    if (isHighlighted) BitmapDescriptorFactory.HUE_AZURE else BitmapDescriptorFactory.HUE_RED
+        if (showMessageMarkers) {
+            messages.forEach { message ->
+                val isNearby = nearbyMessageIds.contains(message.id)
+                val isHighlighted = message.id == highlightedMessageId
+                val markerTitle = if (isNearby) "Nearby" else "Message"
+                val hasBeenOpened = readMessageIds.contains(message.id)
+                val markerIcon = if (!isNearby) {
+                    BitmapDescriptorFactory.defaultMarker(
+                        if (isHighlighted) BitmapDescriptorFactory.HUE_AZURE else BitmapDescriptorFactory.HUE_RED
+                    )
+                } else {
+                    when {
+                        isHighlighted && hasBeenOpened -> markerIcons.readHighlighted
+                        isHighlighted -> markerIcons.unreadHighlighted
+                        hasBeenOpened -> markerIcons.read
+                        else -> markerIcons.unread
+                    }
+                }
+                Marker(
+                    state = MarkerState(position = LatLng(message.latitude, message.longitude)),
+                    title = markerTitle,
+                    snippet = null,
+                    icon = markerIcon,
+                    zIndex = if (isHighlighted) 1f else 0f,
+                    onClick = {
+                        onMarkerClick(message)
+                        true
+                    }
                 )
-            } else {
-                when {
-                    isHighlighted && hasBeenOpened -> markerIcons.readHighlighted
-                    isHighlighted -> markerIcons.unreadHighlighted
-                    hasBeenOpened -> markerIcons.read
-                    else -> markerIcons.unread
-                }
             }
-            Marker(
-                state = MarkerState(position = LatLng(message.latitude, message.longitude)),
-                title = markerTitle,
-                snippet = null,
-                icon = markerIcon,
-                zIndex = if (isHighlighted) 1f else 0f,
-                onClick = {
-                    onMarkerClick(message)
-                    true
-                }
-            )
         }
         selectedLatLng?.let {
             Marker(state = MarkerState(position = it), title = "Selected location")
