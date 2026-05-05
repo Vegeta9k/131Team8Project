@@ -170,7 +170,7 @@ private fun LoginScreen(
     ) {
         Spacer(modifier = Modifier.height(24.dp))
         Text(
-            text = "Map Messages",
+            text = "Message In A Bottle",
             style = MaterialTheme.typography.headlineMedium
         )
         Spacer(modifier = Modifier.height(8.dp))
@@ -642,8 +642,11 @@ private fun LocationMessagesScreen(
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(
                                 onClick = {
-                                    viewModel.saveMessage()
-                                    isWritingMessage = false
+                                    viewModel.saveMessage { didSave ->
+                                        if (didSave) {
+                                            isWritingMessage = false
+                                        }
+                                    }
                                 },
                                 enabled = !isGuest && draftText.isNotBlank() && selectedLatLng != null && canWriteSelectedMessage
                             ) {

@@ -1,0 +1,30 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAuthed() {
+      return request.auth != null;
+    }
+
+    function isNonAnonymousUser() {
+      return isAuthed() &&
+        request.auth.token.firebase.sign_in_provider != "anonymous";
+    }
+
+    match /messages/{messageId} {
+      // Allow map pins/messages to load even before auth resolves.
+      allow read: if true;
+
+      // Writes require a signed-in non-guest user.
+      allow create: if isNonAnonymousUser() &&
+        request.resource.data.authorId == request.auth.uid;
+      allow update, delete: if isNonAnonymousUser();
+
+      // Each user may write only their own vote document.
+      match /votes/{userId} {
+        allow read: if true;
+        allow create, update, delete: if isNonAnonymousUser() &&
+          request.auth.uid == userId;
+      }
+    }
+  }
+}

@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -64,6 +65,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _readMessageIds = MutableStateFlow(loadReadMessageIds())
     val readMessageIds: StateFlow<Set<String>> = _readMessageIds.asStateFlow()
+    private var messagesObserverJob: Job? = null
 
     val nearbyMessages = combine(messages, userLatLng) { allMessages, user ->
         if (user == null) {
@@ -97,19 +99,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             // Bootstrap from persisted Firebase session so "guest vs user" permissions are correct
             // even after app restarts.
             restoreExistingSession(repo)
-            viewModelScope.launch {
-                repo.observeMessages().collect { result ->
-                    result
-                        .onSuccess { cloudMessages ->
-                            _messages.value = cloudMessages
-                            pruneReadMessageIds(cloudMessages.map { it.id }.toSet())
-                            _syncError.value = null
-                        }
-                        .onFailure {
-                            _syncError.value = it.message ?: "Could not sync cloud messages."
-                        }
-                }
-            }
+            startObservingMessages()
         }
     }
 
@@ -133,6 +123,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _isGuest.value = repo.isGuestUser()
                     _currentUserId.value = uid
                     _syncError.value = null
+                    startObservingMessages()
                     onFinished(true)
                 }
                 .onFailure {
@@ -160,6 +151,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _isGuest.value = false
                     _currentUserId.value = uid
                     _syncError.value = null
+                    startObservingMessages()
                     onFinished(true)
                 }
                 .onFailure { e ->
@@ -187,6 +179,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _isGuest.value = false
                     _currentUserId.value = uid
                     _syncError.value = null
+                    startObservingMessages()
                     onFinished(true)
                 }
                 .onFailure { e ->
@@ -201,6 +194,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun signOut() {
         repository?.signOut()
+        stopObservingMessages()
         _isSignedIn.value = false
         _isGuest.value = false
         _currentUserId.value = null
@@ -239,22 +233,32 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _userLatLng.value = LatLng(location.latitude, location.longitude)
     }
 
-    fun saveMessage() {
+    fun saveMessage(onFinished: (Boolean) -> Unit = {}) {
         if (_isGuest.value) {
             _syncError.value = "Guests can't write messages. Please register or log in."
+            onFinished(false)
             return
         }
         val repo = repository ?: run {
             _syncError.value = "Firebase is not configured. Add app/google-services.json."
+            onFinished(false)
             return
         }
 
         val text = _draftText.value.trim()
-        if (text.isBlank()) return
+        if (text.isBlank()) {
+            onFinished(false)
+            return
+        }
 
-        val destination = _selectedLatLng.value ?: _userLatLng.value ?: return
+        val destination = _selectedLatLng.value ?: _userLatLng.value ?: run {
+            _syncError.value = "Location not ready yet. Wait for GPS, then try again."
+            onFinished(false)
+            return
+        }
         if (!canWriteAt(destination)) {
             _syncError.value = "You can only write messages within 150m of your current location."
+            onFinished(false)
             return
         }
 
@@ -269,9 +273,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _draftText.update { "" }
                     _selectedLatLng.update { null }
                     _syncError.update { null }
+                    onFinished(true)
                 }
                 .onFailure { throwable ->
                     _syncError.update { throwable.message ?: "Message upload failed." }
+                    onFinished(false)
                 }
         }
     }
@@ -353,6 +359,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _isGuest.value = repo.isGuestUser()
         _currentUserId.value = existingUid
         _authStateResolved.value = true
+    }
+
+    private fun startObservingMessages() {
+        val repo = repository ?: return
+        if (!_isSignedIn.value) return
+        if (messagesObserverJob?.isActive == true) return
+        messagesObserverJob = viewModelScope.launch {
+            repo.observeMessages().collect { result ->
+                result
+                    .onSuccess { cloudMessages ->
+                        _messages.value = cloudMessages
+                        pruneReadMessageIds(cloudMessages.map { it.id }.toSet())
+                        _syncError.value = null
+                    }
+                    .onFailure {
+                        _syncError.value = it.message ?: "Could not sync cloud messages."
+                    }
+            }
+        }
+    }
+
+    private fun stopObservingMessages() {
+        messagesObserverJob?.cancel()
+        messagesObserverJob = null
     }
 
     fun canReadMessage(message: LocationMessage): Boolean {
