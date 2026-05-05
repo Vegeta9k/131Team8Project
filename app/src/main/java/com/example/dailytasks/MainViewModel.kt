@@ -62,6 +62,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val profanityDisableWarningAcknowledged: StateFlow<Boolean> =
         _profanityDisableWarningAcknowledged.asStateFlow()
 
+    private val _readMessageIds = MutableStateFlow(loadReadMessageIds())
+    val readMessageIds: StateFlow<Set<String>> = _readMessageIds.asStateFlow()
+
     val nearbyMessages = combine(messages, userLatLng) { allMessages, user ->
         if (user == null) {
             emptyList()
@@ -99,6 +102,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     result
                         .onSuccess { cloudMessages ->
                             _messages.value = cloudMessages
+                            pruneReadMessageIds(cloudMessages.map { it.id }.toSet())
                             _syncError.value = null
                         }
                         .onFailure {
@@ -202,6 +206,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _currentUserId.value = null
         _selectedLatLng.value = null
         _syncError.value = null
+        clearReadMessageIds()
+    }
+
+    /**
+     * Marks a message as read locally after the user taps its map pin while within [NEARBY_RADIUS_METERS].
+     */
+    fun markMessageReadIfNearby(message: LocationMessage) {
+        if (!canReadMessage(message)) return
+        val id = message.id.ifBlank { return }
+        _readMessageIds.update { current ->
+            if (id in current) return@update current
+            val next = HashSet(current).apply { add(id) }
+            preferences.edit().putStringSet(KEY_READ_MESSAGE_IDS, next).apply()
+            next.toSet()
+        }
     }
 
     fun updateDraftText(value: String) {
@@ -369,6 +388,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return preferences.getBoolean(KEY_PROFANITY_DISABLE_WARNING_ACKNOWLEDGED, false)
     }
 
+    private fun loadReadMessageIds(): Set<String> {
+        return preferences.getStringSet(KEY_READ_MESSAGE_IDS, emptySet())?.toSet().orEmpty()
+    }
+
+    private fun pruneReadMessageIds(validIds: Set<String>) {
+        _readMessageIds.update { stored ->
+            val pruned = stored.filter { it in validIds }.toSet()
+            if (pruned.size != stored.size) {
+                preferences.edit().putStringSet(KEY_READ_MESSAGE_IDS, HashSet(pruned)).apply()
+            }
+            pruned
+        }
+    }
+
+    private fun clearReadMessageIds() {
+        _readMessageIds.value = emptySet()
+        preferences.edit().remove(KEY_READ_MESSAGE_IDS).apply()
+    }
+
     private fun filterProfanity(text: String): String {
         var sanitized = text
         profanityPatterns.forEach { pattern ->
@@ -482,5 +520,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         private const val KEY_PROFANITY_FILTER = "profanity_filter_enabled"
         private const val KEY_PROFANITY_DISABLE_WARNING_ACKNOWLEDGED =
             "profanity_disable_warning_acknowledged"
+        private const val KEY_READ_MESSAGE_IDS = "read_message_ids"
     }
 }

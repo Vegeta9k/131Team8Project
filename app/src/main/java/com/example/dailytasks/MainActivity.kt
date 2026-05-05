@@ -3,6 +3,8 @@ package com.example.dailytasks
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.content.pm.PackageManager
 import android.location.Location
 import android.os.Bundle
@@ -10,6 +12,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.annotation.DrawableRes
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -60,6 +63,7 @@ import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.maps.CameraUpdateFactory
+import com.google.android.gms.maps.model.BitmapDescriptor
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.CameraPositionState
@@ -69,6 +73,33 @@ import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
+
+private data class MessageMapMarkerIcons(
+    val unread: BitmapDescriptor,
+    val read: BitmapDescriptor,
+    val unreadHighlighted: BitmapDescriptor,
+    val readHighlighted: BitmapDescriptor
+)
+
+private fun bitmapDescriptorFromDrawable(
+    context: Context,
+    @DrawableRes resId: Int,
+    targetWidthDp: Float = 44f
+): BitmapDescriptor {
+    val drawable = ContextCompat.getDrawable(context, resId)!!
+    val density = context.resources.displayMetrics.density
+    val targetPx = (targetWidthDp * density).toInt().coerceIn(24, 256)
+    val srcW = drawable.intrinsicWidth.takeIf { it > 0 } ?: targetPx
+    val srcH = drawable.intrinsicHeight.takeIf { it > 0 } ?: targetPx
+    val aspect = srcH.toFloat() / srcW.toFloat().coerceAtLeast(0.01f)
+    val w = targetPx
+    val h = (targetPx * aspect).toInt().coerceAtLeast(1).coerceAtMost(512)
+    val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    drawable.setBounds(0, 0, canvas.width, canvas.height)
+    drawable.draw(canvas)
+    return BitmapDescriptorFactory.fromBitmap(bitmap)
+}
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -375,6 +406,7 @@ private fun LocationMessagesScreen(
     val context = LocalContext.current
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val nearbyMessages by viewModel.nearbyMessages.collectAsStateWithLifecycle()
+    val readMessageIds by viewModel.readMessageIds.collectAsStateWithLifecycle()
     val draftText by viewModel.draftText.collectAsStateWithLifecycle()
     val selectedLatLng by viewModel.selectedLatLng.collectAsStateWithLifecycle()
     val userLatLng by viewModel.userLatLng.collectAsStateWithLifecycle()
@@ -414,6 +446,8 @@ private fun LocationMessagesScreen(
         LocationUpdatesEffect(onLocationUpdate = viewModel::updateUserLocation)
     }
 
+    val mapMarkerIcons = rememberMessageMapMarkerIcons()
+
     Box(modifier = Modifier.fillMaxSize()) {
         MapSection(
             modifier = Modifier.fillMaxSize(),
@@ -421,7 +455,9 @@ private fun LocationMessagesScreen(
             messages = messages,
             selectedLatLng = selectedLatLng,
             nearbyMessageIds = nearbyMessages.map { it.id }.toSet(),
+            readMessageIds = readMessageIds,
             highlightedMessageId = popupMessageId,
+            markerIcons = mapMarkerIcons,
             isMyLocationEnabled = permissionsGranted,
             onMapClick = {
                 popupMessageId = null
@@ -431,6 +467,7 @@ private fun LocationMessagesScreen(
             },
             onMarkerClick = { message ->
                 popupMessageId = message.id
+                viewModel.markMessageReadIfNearby(message)
             }
         )
 
@@ -701,6 +738,20 @@ private fun MyMessagesScreen(
 }
 
 @Composable
+private fun rememberMessageMapMarkerIcons(): MessageMapMarkerIcons {
+    val context = LocalContext.current
+    val densityDpi = context.resources.configuration.densityDpi
+    return remember(densityDpi) {
+        MessageMapMarkerIcons(
+            unread = bitmapDescriptorFromDrawable(context, R.drawable.map_marker_message_unread, 44f),
+            read = bitmapDescriptorFromDrawable(context, R.drawable.map_marker_message_read, 44f),
+            unreadHighlighted = bitmapDescriptorFromDrawable(context, R.drawable.map_marker_message_unread, 52f),
+            readHighlighted = bitmapDescriptorFromDrawable(context, R.drawable.map_marker_message_read, 52f)
+        )
+    }
+}
+
+@Composable
 private fun SettingsScreen(
     darkThemeEnabled: Boolean,
     profanityFilterEnabled: Boolean,
@@ -804,7 +855,9 @@ private fun MapSection(
     messages: List<LocationMessage>,
     selectedLatLng: LatLng?,
     nearbyMessageIds: Set<String>,
+    readMessageIds: Set<String>,
     highlightedMessageId: String?,
+    markerIcons: MessageMapMarkerIcons,
     isMyLocationEnabled: Boolean,
     onMapClick: (LatLng) -> Unit,
     onMarkerClick: (LocationMessage) -> Unit
@@ -829,18 +882,28 @@ private fun MapSection(
         onMapClick = onMapClick
     ) {
         messages.forEach { message ->
-            val markerTitle = if (nearbyMessageIds.contains(message.id)) "Nearby" else "Message"
+            val isNearby = nearbyMessageIds.contains(message.id)
+            val isHighlighted = message.id == highlightedMessageId
+            val markerTitle = if (isNearby) "Nearby" else "Message"
+            val hasBeenOpened = readMessageIds.contains(message.id)
+            val markerIcon = if (!isNearby) {
+                BitmapDescriptorFactory.defaultMarker(
+                    if (isHighlighted) BitmapDescriptorFactory.HUE_AZURE else BitmapDescriptorFactory.HUE_RED
+                )
+            } else {
+                when {
+                    isHighlighted && hasBeenOpened -> markerIcons.readHighlighted
+                    isHighlighted -> markerIcons.unreadHighlighted
+                    hasBeenOpened -> markerIcons.read
+                    else -> markerIcons.unread
+                }
+            }
             Marker(
                 state = MarkerState(position = LatLng(message.latitude, message.longitude)),
                 title = markerTitle,
                 snippet = null,
-                icon = BitmapDescriptorFactory.defaultMarker(
-                    if (message.id == highlightedMessageId) {
-                        BitmapDescriptorFactory.HUE_AZURE
-                    } else {
-                        BitmapDescriptorFactory.HUE_RED
-                    }
-                ),
+                icon = markerIcon,
+                zIndex = if (isHighlighted) 1f else 0f,
                 onClick = {
                     onMarkerClick(message)
                     true
