@@ -617,7 +617,7 @@ private fun LocationMessagesScreen(
                         val canWriteSelectedMessage = viewModel.canWriteSelectedMessage()
                         Text(
                             text = if (selectedLatLng == null) {
-                                "Tap the map to choose where to place your message."
+                                "Tap on the map to choose where to place your message."
                             } else {
                                 "Location selected. You can save only if it is within 150m of you."
                             },
