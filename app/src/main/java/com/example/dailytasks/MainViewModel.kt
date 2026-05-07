@@ -24,6 +24,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         .getStringArray(R.array.profanity_filter_vocabulary)
         .toList()
     private val profanityPatterns = profanityWords.map(::buildProfanityPattern)
+    private val adminEmails = application.resources
+        .getStringArray(R.array.admin_account_emails)
+        .map(::normalizeEmail)
+        .filter { it.isNotBlank() }
+        .toSet()
 
     private val _draftText = MutableStateFlow("")
     val draftText: StateFlow<String> = _draftText.asStateFlow()
@@ -49,6 +54,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _currentUserId = MutableStateFlow<String?>(null)
     val currentUserId: StateFlow<String?> = _currentUserId.asStateFlow()
 
+    private val _isAdmin = MutableStateFlow(false)
+    val isAdmin: StateFlow<Boolean> = _isAdmin.asStateFlow()
+
     private val _syncError = MutableStateFlow<String?>(null)
     val syncError: StateFlow<String?> = _syncError.asStateFlow()
 
@@ -65,6 +73,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _readMessageIds = MutableStateFlow(loadReadMessageIds())
     val readMessageIds: StateFlow<Set<String>> = _readMessageIds.asStateFlow()
+    private val _myMessagesSortOrder = MutableStateFlow(MyMessagesSortOrder.DATE)
+    val myMessagesSortOrder: StateFlow<MyMessagesSortOrder> = _myMessagesSortOrder.asStateFlow()
     private var messagesObserverJob: Job? = null
 
     val nearbyMessages = combine(messages, userLatLng) { allMessages, user ->
@@ -82,11 +92,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    val myMessages = combine(messages, currentUserId) { allMessages, uid ->
+    val myMessages = combine(messages, currentUserId, myMessagesSortOrder) { allMessages, uid, sortOrder ->
         if (uid.isNullOrBlank()) {
             emptyList()
         } else {
-            allMessages.filter { it.authorId == uid }
+            allMessages
+                .filter { it.authorId == uid }
+                .sortedWith(sortOrder.comparator)
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
@@ -111,6 +123,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (repo == null) {
             _isSignedIn.value = false
             _isGuest.value = true
+            _isAdmin.value = false
             _currentUserId.value = null
             onFinished(true)
             return
@@ -121,6 +134,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 .onSuccess { uid ->
                     _isSignedIn.value = true
                     _isGuest.value = repo.isGuestUser()
+                    _isAdmin.value = resolveIsAdmin(repo)
                     _currentUserId.value = uid
                     _syncError.value = null
                     startObservingMessages()
@@ -129,6 +143,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 .onFailure {
                     _isSignedIn.value = false
                     _isGuest.value = false
+                    _isAdmin.value = false
                     _currentUserId.value = null
                     _syncError.value = it.message ?: "Authentication failed."
                     onFinished(false)
@@ -149,6 +164,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 .onSuccess { uid ->
                     _isSignedIn.value = true
                     _isGuest.value = false
+                    _isAdmin.value = resolveIsAdmin(repo)
                     _currentUserId.value = uid
                     _syncError.value = null
                     startObservingMessages()
@@ -157,6 +173,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 .onFailure { e ->
                     _isSignedIn.value = false
                     _isGuest.value = false
+                    _isAdmin.value = false
                     _currentUserId.value = null
                     _syncError.value = e.message ?: "Could not create account."
                     onFinished(false)
@@ -177,6 +194,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 .onSuccess { uid ->
                     _isSignedIn.value = true
                     _isGuest.value = false
+                    _isAdmin.value = resolveIsAdmin(repo)
                     _currentUserId.value = uid
                     _syncError.value = null
                     startObservingMessages()
@@ -185,6 +203,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 .onFailure { e ->
                     _isSignedIn.value = false
                     _isGuest.value = false
+                    _isAdmin.value = false
                     _currentUserId.value = null
                     _syncError.value = e.message ?: "Could not sign in."
                     onFinished(false)
@@ -197,6 +216,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         stopObservingMessages()
         _isSignedIn.value = false
         _isGuest.value = false
+        _isAdmin.value = false
         _currentUserId.value = null
         _selectedLatLng.value = null
         _syncError.value = null
@@ -296,12 +316,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         val uid = _currentUserId.value
-        if (uid.isNullOrBlank() || message.authorId != uid) {
-            _syncError.value = "You can delete only your own messages."
+        val canDeleteOwnMessage = !uid.isNullOrBlank() && message.authorId == uid
+        val canDeleteAsNearbyAdmin = _isAdmin.value && canReadMessage(message)
+        if (!canDeleteOwnMessage && !canDeleteAsNearbyAdmin) {
+            _syncError.value = if (_isAdmin.value) {
+                "Admins can delete any nearby message. Move within 150m to delete it."
+            } else {
+                "You can delete only your own messages."
+            }
             return
         }
         viewModelScope.launch {
-            repo.deleteMessage(message.id)
+            repo.deleteMessage(message.id, allowDeleteAny = canDeleteAsNearbyAdmin)
                 .onSuccess {
                     _syncError.value = null
                 }
@@ -334,6 +360,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         preferences.edit().putBoolean(KEY_PROFANITY_DISABLE_WARNING_ACKNOWLEDGED, true).apply()
     }
 
+    fun setMyMessagesSortOrder(sortOrder: MyMessagesSortOrder) {
+        _myMessagesSortOrder.value = sortOrder
+    }
+
     fun displayMessageText(message: LocationMessage): String {
         if (!canReadMessage(message)) {
             return "Move within 150m to read this message."
@@ -357,6 +387,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val existingUid = repo.currentUserId()
         _isSignedIn.value = !existingUid.isNullOrBlank()
         _isGuest.value = repo.isGuestUser()
+        _isAdmin.value = resolveIsAdmin(repo)
         _currentUserId.value = existingUid
         _authStateResolved.value = true
     }
@@ -401,6 +432,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return message.authorId == _currentUserId.value || canVoteOnMessage(message)
     }
 
+    fun canDeleteMessageFromMap(message: LocationMessage): Boolean {
+        return _isAdmin.value && canReadMessage(message)
+    }
+
     fun canWriteSelectedMessage(): Boolean {
         val destination = _selectedLatLng.value ?: return false
         return canWriteAt(destination)
@@ -435,6 +470,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun clearReadMessageIds() {
         _readMessageIds.value = emptySet()
         preferences.edit().remove(KEY_READ_MESSAGE_IDS).apply()
+    }
+
+    private fun resolveIsAdmin(repo: MessageSyncRepository): Boolean {
+        if (repo.isGuestUser()) return false
+        val normalizedEmail = normalizeEmail(repo.currentUserEmail().orEmpty())
+        return normalizedEmail.isNotBlank() && normalizedEmail in adminEmails
     }
 
     private fun filterProfanity(text: String): String {
@@ -488,6 +529,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             .trim()
     }
 
+    private fun normalizeEmail(email: String): String {
+        return email.trim().lowercase(Locale.US)
+    }
+
     private fun submitVote(message: LocationMessage, isUpvote: Boolean) {
         if (_isGuest.value) {
             _syncError.value = "Guests can't vote. Please register or log in."
@@ -502,7 +547,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         viewModelScope.launch {
-            repo.voteOnMessage(message.id, isUpvote)
+            repo.voteOnMessage(
+                message.id,
+                isUpvote,
+                allowUnlimitedVotes = _isAdmin.value
+            )
                 .onSuccess {
                     _syncError.value = null
                 }
@@ -552,4 +601,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             "profanity_disable_warning_acknowledged"
         private const val KEY_READ_MESSAGE_IDS = "read_message_ids"
     }
+}
+
+enum class MyMessagesSortOrder(val label: String, val comparator: Comparator<LocationMessage>) {
+    DATE(
+        label = "Date",
+        comparator = compareByDescending<LocationMessage> { it.createdAtEpochMs }
+            .thenByDescending { it.upvotes }
+    ),
+    UPVOTES(
+        label = "Upvotes",
+        comparator = compareByDescending<LocationMessage> { it.upvotes }
+            .thenByDescending { it.createdAtEpochMs }
+    )
 }

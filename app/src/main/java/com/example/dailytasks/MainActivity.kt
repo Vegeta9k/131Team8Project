@@ -15,6 +15,7 @@ import androidx.activity.compose.setContent
 import androidx.annotation.DrawableRes
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -33,8 +34,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -50,7 +53,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -415,6 +422,7 @@ private fun LocationMessagesScreen(
     val userLatLng by viewModel.userLatLng.collectAsStateWithLifecycle()
     val isSignedIn by viewModel.isSignedIn.collectAsStateWithLifecycle()
     val isGuest by viewModel.isGuest.collectAsStateWithLifecycle()
+    val isAdmin by viewModel.isAdmin.collectAsStateWithLifecycle()
     val syncError by viewModel.syncError.collectAsStateWithLifecycle()
     var permissionsGranted by remember { mutableStateOf(hasLocationPermission(context)) }
     val cameraPositionState = rememberCameraPositionState()
@@ -553,6 +561,8 @@ private fun LocationMessagesScreen(
             popupMessage?.let { message ->
                 val canReadMessage = viewModel.canReadMessage(message)
                 val canVoteOnMessage = viewModel.canVoteOnMessage(message)
+                val canDeleteFromMap = viewModel.canDeleteMessageFromMap(message)
+                val accent = rememberMessageAccent(message.displayedPoints)
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -560,16 +570,17 @@ private fun LocationMessagesScreen(
                             if (popupMessageId == message.id) {
                                 popupMessageId = null
                             }
-                        }
+                        },
+                    border = accent.border,
+                    colors = CardDefaults.cardColors(
+                        containerColor = accent.containerColor
+                    )
                 ) {
                     Column(
                         modifier = Modifier.padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text(
-                            text = "Points: ${message.displayedPoints}",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
+                        MessagePointsText(points = message.displayedPoints)
                         Text(viewModel.displayMessageText(message), style = MaterialTheme.typography.bodyLarge)
                         if (!canReadMessage) {
                             Text(
@@ -590,6 +601,16 @@ private fun LocationMessagesScreen(
                                 enabled = !isGuest && canVoteOnMessage
                             ) {
                                 Text("Downvote")
+                            }
+                        }
+                        if (isAdmin) {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                TextButton(
+                                    onClick = { viewModel.deleteMessage(message) },
+                                    enabled = !isGuest && canDeleteFromMap
+                                ) {
+                                    Text("Delete")
+                                }
                             }
                         }
                         Text("Tap card to close", style = MaterialTheme.typography.bodySmall)
@@ -678,6 +699,7 @@ private fun MyMessagesScreen(
     BackHandler(onBack = onBack)
 
     val myMessages by viewModel.myMessages.collectAsStateWithLifecycle()
+    val myMessagesSortOrder by viewModel.myMessagesSortOrder.collectAsStateWithLifecycle()
     val isGuest by viewModel.isGuest.collectAsStateWithLifecycle()
 
     Column(
@@ -697,16 +719,44 @@ private fun MyMessagesScreen(
             }
         }
 
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Sort by",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            MyMessagesSortOrder.entries.forEach { sortOrder ->
+                val isSelected = sortOrder == myMessagesSortOrder
+                if (isSelected) {
+                    Button(onClick = { viewModel.setMyMessagesSortOrder(sortOrder) }) {
+                        Text(sortOrder.label)
+                    }
+                } else {
+                    OutlinedButton(onClick = { viewModel.setMyMessagesSortOrder(sortOrder) }) {
+                        Text(sortOrder.label)
+                    }
+                }
+            }
+        }
+
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(myMessages, key = { it.id }) { message ->
                 val canReadMessage = viewModel.canReadOwnMessage(message)
                 val canVoteOnMessage = viewModel.canVoteOnOwnMessage(message)
-                Card(modifier = Modifier.fillMaxWidth()) {
+                val accent = rememberMessageAccent(message.displayedPoints)
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    border = accent.border,
+                    colors = CardDefaults.cardColors(
+                        containerColor = accent.containerColor
+                    )
+                ) {
                     Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(
-                            text = "Points: ${message.displayedPoints}",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
+                        MessagePointsText(points = message.displayedPoints)
                         Text(viewModel.displayMyMessageText(message), style = MaterialTheme.typography.bodyLarge)
                         if (!canReadMessage) {
                             Text(
@@ -742,6 +792,82 @@ private fun MyMessagesScreen(
             }
         }
     }
+}
+
+private data class MessageAccent(
+    val glowColor: Color?,
+    val containerColor: Color,
+    val border: BorderStroke?
+)
+
+@Composable
+private fun rememberMessageAccent(points: Long): MessageAccent {
+    val colorScheme = MaterialTheme.colorScheme
+    val glowColor = when {
+        points >= 100L -> Color(0xFFFF3B30)
+        points >= 50L -> Color(0xFFFF9500)
+        points >= 10L -> Color(0xFFFFD60A)
+        else -> null
+    }
+
+    return remember(points, colorScheme.surfaceVariant, glowColor) {
+        val baseContainer = colorScheme.surfaceVariant
+        if (glowColor == null) {
+            MessageAccent(
+                glowColor = null,
+                containerColor = baseContainer,
+                border = null
+            )
+        } else {
+            val borderAlpha = when {
+                points >= 100L -> 0.9f
+                points >= 50L -> 0.8f
+                else -> 0.7f
+            }
+            val containerAlpha = when {
+                points >= 100L -> 0.22f
+                points >= 50L -> 0.18f
+                else -> 0.12f
+            }
+            val borderWidth = when {
+                points >= 100L -> 3.dp
+                points >= 50L -> 2.dp
+                else -> 1.dp
+            }
+            MessageAccent(
+                glowColor = glowColor,
+                containerColor = glowColor.copy(alpha = containerAlpha).compositeOver(baseContainer),
+                border = BorderStroke(borderWidth, glowColor.copy(alpha = borderAlpha))
+            )
+        }
+    }
+}
+
+@Composable
+private fun MessagePointsText(points: Long) {
+    val accent = rememberMessageAccent(points)
+    val glowColor = accent.glowColor
+    val textStyle = if (glowColor == null) {
+        MaterialTheme.typography.bodyMedium
+    } else {
+        MaterialTheme.typography.bodyMedium.copy(
+            color = glowColor,
+            shadow = Shadow(
+                color = glowColor.copy(alpha = 0.9f),
+                offset = Offset.Zero,
+                blurRadius = when {
+                    points >= 100L -> 28f
+                    points >= 50L -> 22f
+                    else -> 16f
+                }
+            )
+        )
+    }
+
+    Text(
+        text = "Points: $points",
+        style = textStyle
+    )
 }
 
 @Composable

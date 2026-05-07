@@ -16,6 +16,7 @@ class MessageSyncRepository(
     private val messagesCollection = firestore.collection(MESSAGES_COLLECTION)
 
     fun currentUserId(): String? = auth.currentUser?.uid
+    fun currentUserEmail(): String? = auth.currentUser?.email
 
     fun isSignedIn(): Boolean = auth.currentUser != null
 
@@ -78,7 +79,7 @@ class MessageSyncRepository(
         }.map { Unit }
     }
 
-    suspend fun deleteMessage(messageId: String): Result<Unit> {
+    suspend fun deleteMessage(messageId: String, allowDeleteAny: Boolean = false): Result<Unit> {
         if (messageId.isBlank()) return Result.failure(IllegalArgumentException("Invalid message ID."))
         if (isGuestUser()) {
             return Result.failure(
@@ -89,14 +90,18 @@ class MessageSyncRepository(
         return runCatching {
             val doc = messagesCollection.document(messageId).get().await()
             val authorId = doc.getString("authorId").orEmpty()
-            if (authorId != uid) {
+            if (!allowDeleteAny && authorId != uid) {
                 error("You can delete only your own messages.")
             }
             messagesCollection.document(messageId).delete().await()
         }.map { Unit }
     }
 
-    suspend fun voteOnMessage(messageId: String, isUpvote: Boolean): Result<Unit> {
+    suspend fun voteOnMessage(
+        messageId: String,
+        isUpvote: Boolean,
+        allowUnlimitedVotes: Boolean = false
+    ): Result<Unit> {
         if (messageId.isBlank()) return Result.failure(IllegalArgumentException("Invalid message ID."))
         if (isGuestUser()) {
             return Result.failure(
@@ -117,6 +122,32 @@ class MessageSyncRepository(
                 val currentUpvotes = snapshot.getLong("upvotes") ?: 0L
                 val currentDownvotes = snapshot.getLong("downvotes") ?: 0L
                 val currentRating = snapshot.getLong("rating") ?: (currentUpvotes - currentDownvotes)
+
+                if (allowUnlimitedVotes) {
+                    val updates = if (isUpvote) {
+                        mapOf(
+                            "upvotes" to currentUpvotes + 1L,
+                            "rating" to currentRating + 1L
+                        )
+                    } else {
+                        mapOf(
+                            "downvotes" to currentDownvotes + 1L,
+                            "rating" to currentRating - 1L
+                        )
+                    }
+
+                    if (!isUpvote && currentRating - 1L <= AUTO_DELETE_RATING_THRESHOLD) {
+                        transaction.delete(docRef)
+                        return@runTransaction null
+                    }
+
+                    transaction.update(
+                        docRef,
+                        updates
+                    )
+                    return@runTransaction null
+                }
+
                 val previousVote = voteSnapshot.getLong("vote") ?: 0L
                 val newVote = if (isUpvote) 1L else -1L
 
