@@ -13,12 +13,18 @@ service cloud.firestore {
     function isAdminEmail() {
       return isNonAnonymousUser() &&
         request.auth.token.email != null &&
-        request.auth.token.email in ["admin@example.com", "juandiegohurt@gmail.com"];
+        request.auth.token.email in ["kaisvillanueva7@gmail.com", "juandiegohurt@gmail.com"];
     }
 
     function isMessageOwner() {
       return isAuthed() &&
         resource.data.authorId == request.auth.uid;
+    }
+
+    function isVoteOnlyUpdate() {
+      return request.resource.data.diff(resource.data)
+        .affectedKeys()
+        .hasOnly(["upvotes", "downvotes", "rating"]);
     }
 
     match /messages/{messageId} {
@@ -28,7 +34,7 @@ service cloud.firestore {
       // Writes require a signed-in non-guest user.
       allow create: if isNonAnonymousUser() &&
         request.resource.data.authorId == request.auth.uid;
-      allow update: if false;
+      allow update: if isNonAnonymousUser() && isVoteOnlyUpdate();
       allow delete: if isMessageOwner() || isAdminEmail();
 
       // Each user may write only their own vote document.

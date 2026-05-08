@@ -746,7 +746,7 @@ private fun MyMessagesScreen(
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(myMessages, key = { it.id }) { message ->
                 val canReadMessage = viewModel.canReadOwnMessage(message)
-                val canVoteOnMessage = viewModel.canVoteOnOwnMessage(message)
+                val canVoteOnMessage = viewModel.canVoteOnMessage(message)
                 val accent = rememberMessageAccent(message.displayedPoints)
                 Card(
                     modifier = Modifier.fillMaxWidth(),
