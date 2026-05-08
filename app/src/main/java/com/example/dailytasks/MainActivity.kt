@@ -713,7 +713,7 @@ private fun LocationMessagesScreen(
                             enabled = !isGuest,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("Write message")
+                            Text("Write a message")
                         }
                     } else {
                         val canWriteSelectedMessage = viewModel.canWriteSelectedMessage()
