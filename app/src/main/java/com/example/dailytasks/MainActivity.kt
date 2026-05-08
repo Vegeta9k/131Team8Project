@@ -283,6 +283,12 @@ private fun LoginScreen(
             AuthDestination.REGISTER -> {
                 val passwordsMatch = confirmPassword == password
                 val passwordValid = isPasswordValid(password)
+                val passwordLengthValid = password.length >= PASSWORD_REQUIREMENT_MIN_LENGTH
+                val passwordHasUppercase = password.any { it.isUpperCase() }
+                val passwordHasLowercase = password.any { it.isLowerCase() }
+                val passwordHasDigit = password.any { it.isDigit() }
+                val passwordHasSpecial = password.any { !it.isLetterOrDigit() }
+
                 TextButton(
                     onClick = {
                         viewModel.clearSyncError()
@@ -317,12 +323,67 @@ private fun LoginScreen(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     modifier = Modifier.fillMaxWidth()
                 )
-                if (password.isNotEmpty() && !passwordValid) {
-                    Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(8.dp))
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    val requirementColor = if (password.isEmpty()) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        null
+                    }
                     Text(
-                        text = "Password must be at least $PASSWORD_REQUIREMENT_MIN_LENGTH characters and include uppercase, lowercase, number, and special character.",
+                        text = "Password requirements:",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.align(Alignment.Start)
+                    )
+                    Text(
+                        text = "${if (passwordLengthValid) "✓" else "•"} At least $PASSWORD_REQUIREMENT_MIN_LENGTH characters",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = when {
+                            password.isEmpty() -> MaterialTheme.colorScheme.onSurfaceVariant
+                            passwordLengthValid -> MaterialTheme.colorScheme.primary
+                            else -> MaterialTheme.colorScheme.error
+                        },
+                        modifier = Modifier.align(Alignment.Start)
+                    )
+                    Text(
+                        text = "${if (passwordHasUppercase) "✓" else "•"} One uppercase letter",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = when {
+                            password.isEmpty() -> MaterialTheme.colorScheme.onSurfaceVariant
+                            passwordHasUppercase -> MaterialTheme.colorScheme.primary
+                            else -> MaterialTheme.colorScheme.error
+                        },
+                        modifier = Modifier.align(Alignment.Start)
+                    )
+                    Text(
+                        text = "${if (passwordHasLowercase) "✓" else "•"} One lowercase letter",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = when {
+                            password.isEmpty() -> MaterialTheme.colorScheme.onSurfaceVariant
+                            passwordHasLowercase -> MaterialTheme.colorScheme.primary
+                            else -> MaterialTheme.colorScheme.error
+                        },
+                        modifier = Modifier.align(Alignment.Start)
+                    )
+                    Text(
+                        text = "${if (passwordHasDigit) "✓" else "•"} One number",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = when {
+                            password.isEmpty() -> MaterialTheme.colorScheme.onSurfaceVariant
+                            passwordHasDigit -> MaterialTheme.colorScheme.primary
+                            else -> MaterialTheme.colorScheme.error
+                        },
+                        modifier = Modifier.align(Alignment.Start)
+                    )
+                    Text(
+                        text = "${if (passwordHasSpecial) "✓" else "•"} One special character",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = when {
+                            password.isEmpty() -> MaterialTheme.colorScheme.onSurfaceVariant
+                            passwordHasSpecial -> MaterialTheme.colorScheme.primary
+                            else -> MaterialTheme.colorScheme.error
+                        },
                         modifier = Modifier.align(Alignment.Start)
                     )
                 }
