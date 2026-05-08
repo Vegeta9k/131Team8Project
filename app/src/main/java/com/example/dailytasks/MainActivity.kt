@@ -178,7 +178,7 @@ private fun LoginScreen(
     ) {
         Spacer(modifier = Modifier.height(24.dp))
         Text(
-            text = "Message In A Bottle",
+            text = "Message In a Bottle",
             style = MaterialTheme.typography.headlineMedium
         )
         Spacer(modifier = Modifier.height(8.dp))
@@ -438,7 +438,7 @@ private fun LoginScreen(
         }
         Spacer(modifier = Modifier.weight(1f))
         Text(
-            text = "By signing up and logging in I acknowledge that this an application that is still in development.",
+            text = "By signing up and logging in, I acknowledge that this an application that is still in development.",
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 24.dp),
