@@ -587,7 +587,7 @@ private fun LocationMessagesScreen(
                     ) {
                         if (!isGuest) {
                             TextButton(onClick = onOpenMyMessages) {
-                                Text("Your messages")
+                                Text("My Messages")
                             }
                         } else {
                             Text(
@@ -794,7 +794,7 @@ private fun MyMessagesScreen(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text("Your messages", style = MaterialTheme.typography.headlineSmall)
+            Text("My Messages", style = MaterialTheme.typography.headlineSmall)
             TextButton(onClick = onBack) {
                 Text("Back")
             }
