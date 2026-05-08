@@ -600,7 +600,7 @@ private fun LocationMessagesScreen(
                             Text("Settings")
                         }
                     }
-                    Text("Tap a pin on the map to see its message.", style = MaterialTheme.typography.titleMedium)
+                    Text("Tap a bottle to view a message", style = MaterialTheme.typography.titleMedium)
                     Text(
                         text = if (isSignedIn && syncError.isNullOrBlank()) {
                             "Cloud connected"
