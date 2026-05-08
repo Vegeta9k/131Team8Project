@@ -155,6 +155,29 @@ class MessageSyncRepository(
                     return@runTransaction null
                 }
 
+                if (previousVote != 0L && previousVote != newVote) {
+                    val updatedRating = currentRating - previousVote
+                    val updates = if (previousVote == 1L) {
+                        mapOf(
+                            "upvotes" to currentUpvotes - 1L,
+                            "rating" to updatedRating
+                        )
+                    } else {
+                        mapOf(
+                            "downvotes" to currentDownvotes - 1L,
+                            "rating" to updatedRating
+                        )
+                    }
+
+                    if (updatedRating <= AUTO_DELETE_RATING_THRESHOLD) {
+                        transaction.delete(docRef)
+                    } else {
+                        transaction.delete(voteRef)
+                        transaction.update(docRef, updates)
+                    }
+                    return@runTransaction null
+                }
+
                 val upvoteDelta = when {
                     previousVote == 1L -> -1L
                     newVote == 1L -> 1L
