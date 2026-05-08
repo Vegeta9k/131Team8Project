@@ -32,9 +32,9 @@ class MessageSyncRepository(
         val trimmed = email.trim()
         if (trimmed.isBlank()) return Result.failure(IllegalArgumentException("Enter an email address."))
         if (password.isBlank()) return Result.failure(IllegalArgumentException("Enter a password."))
-        if (password.length < MIN_PASSWORD_LENGTH) {
+        if (!isPasswordValid(password)) {
             return Result.failure(
-                IllegalArgumentException("Password must be at least $MIN_PASSWORD_LENGTH characters.")
+                IllegalArgumentException("Password must be at least $MIN_PASSWORD_LENGTH characters and include uppercase, lowercase, number, and special character.")
             )
         }
         return runCatching {
@@ -241,7 +241,15 @@ class MessageSyncRepository(
         private const val MESSAGES_COLLECTION = "messages"
         private const val VOTES_COLLECTION = "votes"
         private const val AUTO_DELETE_RATING_THRESHOLD = -2L
-        private const val MIN_PASSWORD_LENGTH = 6
+        private const val MIN_PASSWORD_LENGTH = 8
+    }
+
+    private fun isPasswordValid(password: String): Boolean {
+        return password.length >= MIN_PASSWORD_LENGTH &&
+            password.any { it.isUpperCase() } &&
+            password.any { it.isLowerCase() } &&
+            password.any { it.isDigit() } &&
+            password.any { !it.isLetterOrDigit() }
     }
 
     private fun toFriendlyAuthError(throwable: Throwable): Throwable {
@@ -253,7 +261,7 @@ class MessageSyncRepository(
             "ERROR_INVALID_EMAIL" -> IllegalArgumentException("Enter a valid email address.")
             "ERROR_EMAIL_ALREADY_IN_USE" -> IllegalStateException("That email is already registered. Try logging in instead.")
             "ERROR_WEAK_PASSWORD" -> IllegalArgumentException(
-                "Password must be at least $MIN_PASSWORD_LENGTH characters."
+                "Password must be at least $MIN_PASSWORD_LENGTH characters and include uppercase, lowercase, number, and special character."
             )
             "ERROR_USER_NOT_FOUND",
             "ERROR_WRONG_PASSWORD",

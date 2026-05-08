@@ -282,6 +282,7 @@ private fun LoginScreen(
 
             AuthDestination.REGISTER -> {
                 val passwordsMatch = confirmPassword == password
+                val passwordValid = isPasswordValid(password)
                 TextButton(
                     onClick = {
                         viewModel.clearSyncError()
@@ -316,6 +317,15 @@ private fun LoginScreen(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     modifier = Modifier.fillMaxWidth()
                 )
+                if (password.isNotEmpty() && !passwordValid) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Password must be at least $PASSWORD_REQUIREMENT_MIN_LENGTH characters and include uppercase, lowercase, number, and special character.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.align(Alignment.Start)
+                    )
+                }
                 Spacer(modifier = Modifier.height(12.dp))
                 OutlinedTextField(
                     value = confirmPassword,
@@ -341,14 +351,14 @@ private fun LoginScreen(
                 Spacer(modifier = Modifier.height(20.dp))
                 Button(
                     onClick = {
-                        if (isBusy || !passwordsMatch) return@Button
+                        if (isBusy || !passwordValid || !passwordsMatch) return@Button
                         isBusy = true
                         viewModel.registerWithEmailPassword(email, password) { ok ->
                             isBusy = false
                             if (ok) onAuthenticated()
                         }
                     },
-                    enabled = !isBusy && email.isNotBlank() && password.isNotBlank() && confirmPassword.isNotBlank() && passwordsMatch,
+                    enabled = !isBusy && email.isNotBlank() && password.isNotBlank() && confirmPassword.isNotBlank() && passwordValid && passwordsMatch,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(if (isBusy) "Please wait..." else "Create account")
@@ -1062,6 +1072,16 @@ private enum class AuthDestination {
     HOME,
     LOGIN,
     REGISTER
+}
+
+private const val PASSWORD_REQUIREMENT_MIN_LENGTH = 8
+
+private fun isPasswordValid(password: String): Boolean {
+    return password.length >= PASSWORD_REQUIREMENT_MIN_LENGTH &&
+        password.any { it.isUpperCase() } &&
+        password.any { it.isLowerCase() } &&
+        password.any { it.isDigit() } &&
+        password.any { !it.isLetterOrDigit() }
 }
 
 @SuppressLint("MissingPermission")
