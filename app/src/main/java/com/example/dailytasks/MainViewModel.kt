@@ -15,7 +15,9 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = runCatching { MessageSyncRepository() }.getOrNull()
@@ -141,7 +143,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         viewModelScope.launch {
             _syncError.value = null
-            runCatching { repo.ensureSignedIn() }
+            withRepositoryTimeout { repo.ensureSignedIn() }
                 .onSuccess { uid ->
                     applyAuthenticatedSession(
                         uid = uid,
@@ -174,7 +176,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         viewModelScope.launch {
             _syncError.value = null
-            repo.registerWithEmailPassword(email, password, username)
+            withRepositoryTimeout {
+                repo.registerWithEmailPassword(email, password, username)
+            }.getOrElse { Result.failure(it) }
                 .onSuccess { uid ->
                     applyAuthenticatedSession(
                         uid = uid,
@@ -184,6 +188,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         email = repo.currentUserEmail().orEmpty()
                     )
                     startObservingMessages()
+                    loadCurrentUsername()
                     onFinished(true)
                 }
                 .onFailure { e ->
@@ -202,7 +207,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         viewModelScope.launch {
             _syncError.value = null
-            repo.signInWithEmailPassword(email, password)
+            withRepositoryTimeout {
+                repo.signInWithEmailPassword(email, password)
+            }.getOrElse { Result.failure(it) }
                 .onSuccess { uid ->
                     applyAuthenticatedSession(
                         uid = uid,
@@ -212,7 +219,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         email = repo.currentUserEmail().orEmpty()
                     )
                     startObservingMessages()
-
+                    loadCurrentUsername()
                     onFinished(true)
                 }
                 .onFailure { e ->
@@ -231,7 +238,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         viewModelScope.launch {
             _syncError.value = null
-            repo.sendPasswordResetEmail(email.trim())
+            withRepositoryTimeout {
+                repo.sendPasswordResetEmail(email.trim())
+            }.getOrElse { Result.failure(it) }
                 .onSuccess {
                     _syncError.value = "Password reset email sent! Check your email and click the link to reset your password securely."
                     onFinished(true)
@@ -457,6 +466,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _syncError.value = errorMessage
     }
 
+    private fun loadCurrentUsername() {
+        val repo = repository ?: return
+        viewModelScope.launch {
+            _currentUsername.value = withRepositoryTimeout {
+                repo.refreshCurrentUsername()
+            }.getOrNull().orEmpty()
+        }
+    }
+
+    private suspend fun <T> withRepositoryTimeout(block: suspend () -> T): Result<T> {
+        return try {
+            Result.success(withTimeout(AUTH_REQUEST_TIMEOUT_MS) { block() })
+        } catch (_: TimeoutCancellationException) {
+            Result.failure(
+                IllegalStateException(
+                    "The request took too long. Check your internet connection and try again."
+                )
+            )
+        } catch (t: Throwable) {
+            Result.failure(t)
+        }
+    }
+
     private fun startObservingMessages() {
         val repo = repository ?: return
         if (!_isSignedIn.value) return
@@ -676,6 +708,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     companion object {
         const val NEARBY_RADIUS_METERS = 150f
+        private const val AUTH_REQUEST_TIMEOUT_MS = 15_000L
         private const val PREFS_NAME = "map_messages_preferences"
         private const val KEY_DARK_THEME = "dark_theme_enabled"
         private const val KEY_PROFANITY_FILTER = "profanity_filter_enabled"
