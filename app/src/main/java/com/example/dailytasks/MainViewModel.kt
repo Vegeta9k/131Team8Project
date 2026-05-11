@@ -78,6 +78,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val readMessageIds: StateFlow<Set<String>> = _readMessageIds.asStateFlow()
     private val _myMessagesSortOrder = MutableStateFlow(MyMessagesSortOrder.DATE)
     val myMessagesSortOrder: StateFlow<MyMessagesSortOrder> = _myMessagesSortOrder.asStateFlow()
+    private val _pendingNewPassword = MutableStateFlow<String?>(null)
     private var messagesObserverJob: Job? = null
     private var knownUpvotes: Map<String, Long> = emptyMap()
 
@@ -217,6 +218,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _currentUsername.value = repo.refreshCurrentUsername().orEmpty()
                     _syncError.value = null
                     startObservingMessages()
+
                     onFinished(true)
                 }
                 .onFailure { e ->
@@ -226,6 +228,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _currentUserId.value = null
                     _currentUsername.value = ""
                     _syncError.value = e.message ?: "Could not sign in."
+                    onFinished(false)
+                }
+        }
+    }
+
+    fun sendPasswordResetEmail(email: String, onFinished: (Boolean) -> Unit) {
+        val repo = repository
+        if (repo == null) {
+            _syncError.value = "Firebase is not configured."
+            onFinished(false)
+            return
+        }
+        viewModelScope.launch {
+            _syncError.value = null
+            repo.sendPasswordResetEmail(email.trim())
+                .onSuccess {
+                    _syncError.value = "Password reset email sent! Check your email and click the link to reset your password securely."
+                    onFinished(true)
+                }
+                .onFailure { e ->
+                    _syncError.value = e.message ?: "Failed to send reset email."
                     onFinished(false)
                 }
         }

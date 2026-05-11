@@ -44,5 +44,10 @@ service cloud.firestore {
           request.auth.uid == userId;
       }
     }
+
+    match /passwordResets/{email} {
+      // Allow password reset operations (temporary - for demo purposes)
+      allow read, write: if true;
+    }
   }
 }

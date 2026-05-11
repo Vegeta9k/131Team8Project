@@ -179,9 +179,13 @@ private fun LoginScreen(
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
+    var resetCode by remember { mutableStateOf("") }
 
     BackHandler(enabled = authDestination != AuthDestination.HOME) {
-        authDestination = AuthDestination.HOME
+        when (authDestination) {
+            AuthDestination.FORGOT_PASSWORD -> authDestination = AuthDestination.LOGIN
+            else -> authDestination = AuthDestination.HOME
+        }
         viewModel.clearSyncError()
     }
 
@@ -200,7 +204,7 @@ private fun LoginScreen(
         )
         Spacer(modifier = Modifier.height(8.dp))
                     Text(
-            text = "Choose a username when you register. It appears on messages you write.",
+            text = "Please continue to register, login, or guest login below.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -281,6 +285,12 @@ private fun LoginScreen(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     modifier = Modifier.fillMaxWidth()
                 )
+                TextButton(
+                    onClick = { authDestination = AuthDestination.FORGOT_PASSWORD },
+                    modifier = Modifier.align(Alignment.End)
+                ) {
+                    Text("Forgot Password?")
+                }
                 Spacer(modifier = Modifier.height(20.dp))
                 Button(
                     onClick = {
@@ -326,7 +336,7 @@ private fun LoginScreen(
                     label = { Text("Username") },
                     supportingText = {
                         Text(
-                            text = "Your display name on the map.",
+                            text = "Shown publicly on the map.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -359,13 +369,21 @@ private fun LoginScreen(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     modifier = Modifier.fillMaxWidth()
                 )
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = confirmPassword,
+                    onValueChange = {
+                        confirmPassword = it
+                        viewModel.clearSyncError()
+                    },
+                    label = { Text("Confirm password") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    modifier = Modifier.fillMaxWidth()
+                )
                 Spacer(modifier = Modifier.height(8.dp))
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    val requirementColor = if (password.isEmpty()) {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    } else {
-                        null
-                    }
                     Text(
                         text = "Password requirements:",
                         style = MaterialTheme.typography.bodySmall,
@@ -423,19 +441,6 @@ private fun LoginScreen(
                         modifier = Modifier.align(Alignment.Start)
                     )
                 }
-                Spacer(modifier = Modifier.height(12.dp))
-                OutlinedTextField(
-                    value = confirmPassword,
-                    onValueChange = {
-                        confirmPassword = it
-                        viewModel.clearSyncError()
-                    },
-                    label = { Text("Confirm password") },
-                    singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    modifier = Modifier.fillMaxWidth()
-                )
                 if (confirmPassword.isNotEmpty() && !passwordsMatch) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
@@ -461,6 +466,48 @@ private fun LoginScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(if (isBusy) "Please wait..." else "Create account")
+                }
+            }
+
+            AuthDestination.FORGOT_PASSWORD -> {
+                TextButton(
+                    onClick = {
+                        viewModel.clearSyncError()
+                        authDestination = AuthDestination.LOGIN
+                    },
+                    enabled = !isBusy,
+                    modifier = Modifier.align(Alignment.Start)
+                ) {
+                    Text("Back")
+                }
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = {
+                        email = it
+                        viewModel.clearSyncError()
+                    },
+                    label = { Text("Email") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(20.dp))
+                Button(
+                    onClick = {
+                        if (isBusy) return@Button
+                        isBusy = true
+                        viewModel.sendPasswordResetEmail(email) { success ->
+                            isBusy = false
+                            if (success) {
+                                authDestination = AuthDestination.LOGIN
+                                email = ""
+                            }
+                        }
+                    },
+                    enabled = !isBusy && email.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(if (isBusy) "Sending..." else "Send Password Reset Email")
                 }
             }
         }
@@ -1212,7 +1259,8 @@ private enum class AppDestination {
 private enum class AuthDestination {
     HOME,
     LOGIN,
-    REGISTER
+    REGISTER,
+    FORGOT_PASSWORD
 }
 
 private const val PASSWORD_REQUIREMENT_MIN_LENGTH = 8

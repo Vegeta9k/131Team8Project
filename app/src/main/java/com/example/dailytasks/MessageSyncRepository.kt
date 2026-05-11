@@ -8,6 +8,11 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
+import javax.mail.*
+import javax.mail.internet.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.util.Properties
 
 class MessageSyncRepository(
     private val auth: FirebaseAuth = FirebaseAuth.getInstance(),
@@ -81,6 +86,23 @@ class MessageSyncRepository(
         return runCatching {
             val result = auth.signInWithEmailAndPassword(trimmed, password).await()
             result.user?.uid ?: error("Sign-in failed.")
+        }.mapError(::toFriendlyAuthError)
+    }
+
+    suspend fun updatePassword(newPassword: String): Result<Unit> {
+        if (newPassword.isBlank()) return Result.failure(IllegalArgumentException("Enter a password."))
+        return runCatching {
+            val user = auth.currentUser ?: error("Not signed in.")
+            user.updatePassword(newPassword).await()
+            Unit // Convert Void to Unit
+        }.mapError(::toFriendlyAuthError)
+    }
+
+    suspend fun sendPasswordResetEmail(email: String): Result<Unit> {
+        if (email.isBlank()) return Result.failure(IllegalArgumentException("Enter an email address."))
+        return runCatching {
+            auth.sendPasswordResetEmail(email.trim()).await()
+            Unit
         }.mapError(::toFriendlyAuthError)
     }
 
