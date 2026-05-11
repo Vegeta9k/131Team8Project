@@ -18,6 +18,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -177,6 +178,7 @@ private fun LoginScreen(
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
+    var username by remember { mutableStateOf("") }
 
     BackHandler(enabled = authDestination != AuthDestination.HOME) {
         authDestination = AuthDestination.HOME
@@ -197,8 +199,8 @@ private fun LoginScreen(
             style = MaterialTheme.typography.headlineMedium
         )
         Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "Create an account, sign in, or continue as a guest.",
+                    Text(
+            text = "Choose a username when you register. It appears on messages you write.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -316,6 +318,24 @@ private fun LoginScreen(
                     Text("Back")
                 }
                 OutlinedTextField(
+                    value = username,
+                    onValueChange = {
+                        username = it
+                        viewModel.clearSyncError()
+                    },
+                    label = { Text("Username") },
+                    supportingText = {
+                        Text(
+                            text = "Your display name on the map.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedTextField(
                     value = email,
                     onValueChange = {
                         email = it
@@ -430,12 +450,14 @@ private fun LoginScreen(
                     onClick = {
                         if (isBusy || !passwordValid || !passwordsMatch) return@Button
                         isBusy = true
-                        viewModel.registerWithEmailPassword(email, password) { ok ->
+                        viewModel.registerWithEmailPassword(email, password, username) { ok ->
                             isBusy = false
                             if (ok) onAuthenticated()
                         }
                     },
-                    enabled = !isBusy && email.isNotBlank() && password.isNotBlank() && confirmPassword.isNotBlank() && passwordValid && passwordsMatch,
+                    enabled = !isBusy && username.trim().length >= AUTH_USERNAME_PREVIEW_MIN_LENGTH &&
+                        email.isNotBlank() && password.isNotBlank() &&
+                        confirmPassword.isNotBlank() && passwordValid && passwordsMatch,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(if (isBusy) "Please wait..." else "Create account")
@@ -676,6 +698,7 @@ private fun LocationMessagesScreen(
                         modifier = Modifier.padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        MessageAuthorBadge(authorDisplayName = viewModel.displayAuthorUsername(message))
                         MessagePointsText(points = message.displayedPoints)
                         Text(viewModel.displayMessageText(message), style = MaterialTheme.typography.bodyLarge)
                         if (!canReadMessage) {
@@ -852,6 +875,7 @@ private fun MyMessagesScreen(
                     )
                 ) {
                     Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        MessageAuthorBadge(authorDisplayName = viewModel.displayAuthorUsername(message))
                         MessagePointsText(points = message.displayedPoints)
                         Text(viewModel.displayMyMessageText(message), style = MaterialTheme.typography.bodyLarge)
                         if (!canReadMessage) {
@@ -1119,6 +1143,7 @@ private fun MapSection(
                 val isNearby = nearbyMessageIds.contains(message.id)
                 val isHighlighted = message.id == highlightedMessageId
                 val markerTitle = if (isNearby) "Nearby" else "Message"
+                val authorSnippet = message.authorUsername.trim().ifBlank { "Unknown user" }
                 val hasBeenOpened = readMessageIds.contains(message.id)
                 val markerIcon = if (!isNearby) {
                     BitmapDescriptorFactory.defaultMarker(
@@ -1135,7 +1160,7 @@ private fun MapSection(
                 Marker(
                     state = MarkerState(position = LatLng(message.latitude, message.longitude)),
                     title = markerTitle,
-                    snippet = null,
+                    snippet = authorSnippet,
                     icon = markerIcon,
                     zIndex = if (isHighlighted) 1f else 0f,
                     onClick = {
@@ -1147,6 +1172,33 @@ private fun MapSection(
         }
         selectedLatLng?.let {
             Marker(state = MarkerState(position = it), title = "Selected location")
+        }
+    }
+}
+
+private const val AUTH_USERNAME_PREVIEW_MIN_LENGTH = 2
+
+@Composable
+private fun MessageAuthorBadge(authorDisplayName: String) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = "From",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.75f)
+            )
+            Text(
+                text = authorDisplayName,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer
+            )
         }
     }
 }

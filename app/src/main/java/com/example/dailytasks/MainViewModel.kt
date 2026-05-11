@@ -57,6 +57,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _isAdmin = MutableStateFlow(false)
     val isAdmin: StateFlow<Boolean> = _isAdmin.asStateFlow()
 
+    private val _currentUsername = MutableStateFlow("")
+    val currentUsername: StateFlow<String> = _currentUsername.asStateFlow()
+
     private val _syncError = MutableStateFlow<String?>(null)
     val syncError: StateFlow<String?> = _syncError.asStateFlow()
 
@@ -113,6 +116,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             // even after app restarts.
             restoreExistingSession(repo)
             startObservingMessages()
+            viewModelScope.launch {
+                if (repo.isSignedIn() && !repo.isGuestUser()) {
+                    _currentUsername.value = repo.refreshCurrentUsername().orEmpty()
+                }
+            }
         }
     }
 
@@ -138,6 +146,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _isAdmin.value = resolveIsAdmin(repo)
                     _currentUserId.value = uid
                     _syncError.value = null
+                    _currentUsername.value = ""
                     startObservingMessages()
                     onFinished(true)
                 }
@@ -146,13 +155,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _isGuest.value = false
                     _isAdmin.value = false
                     _currentUserId.value = null
+                    _currentUsername.value = ""
                     _syncError.value = it.message ?: "Authentication failed."
                     onFinished(false)
                 }
         }
     }
 
-    fun registerWithEmailPassword(email: String, password: String, onFinished: (Boolean) -> Unit) {
+    fun registerWithEmailPassword(
+        email: String,
+        password: String,
+        username: String,
+        onFinished: (Boolean) -> Unit
+    ) {
         val repo = repository
         if (repo == null) {
             _syncError.value = "Firebase is not configured. Add app/google-services.json."
@@ -161,12 +176,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         viewModelScope.launch {
             _syncError.value = null
-            repo.registerWithEmailPassword(email, password)
+            repo.registerWithEmailPassword(email, password, username)
                 .onSuccess { uid ->
                     _isSignedIn.value = true
                     _isGuest.value = false
                     _isAdmin.value = resolveIsAdmin(repo)
                     _currentUserId.value = uid
+                    _currentUsername.value = repo.refreshCurrentUsername().orEmpty()
                     _syncError.value = null
                     startObservingMessages()
                     onFinished(true)
@@ -176,6 +192,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _isGuest.value = false
                     _isAdmin.value = false
                     _currentUserId.value = null
+                    _currentUsername.value = ""
                     _syncError.value = e.message ?: "Could not create account."
                     onFinished(false)
                 }
@@ -197,6 +214,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _isGuest.value = false
                     _isAdmin.value = resolveIsAdmin(repo)
                     _currentUserId.value = uid
+                    _currentUsername.value = repo.refreshCurrentUsername().orEmpty()
                     _syncError.value = null
                     startObservingMessages()
                     onFinished(true)
@@ -206,6 +224,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _isGuest.value = false
                     _isAdmin.value = false
                     _currentUserId.value = null
+                    _currentUsername.value = ""
                     _syncError.value = e.message ?: "Could not sign in."
                     onFinished(false)
                 }
@@ -219,6 +238,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _isGuest.value = false
         _isAdmin.value = false
         _currentUserId.value = null
+        _currentUsername.value = ""
         _selectedLatLng.value = null
         _syncError.value = null
         clearReadMessageIds()
@@ -382,6 +402,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         } else {
             message.text
         }
+    }
+
+    fun displayAuthorUsername(message: LocationMessage): String {
+        val name = message.authorUsername.trim()
+        if (name.isNotEmpty()) return name
+        return "Unknown user"
     }
 
     private fun restoreExistingSession(repo: MessageSyncRepository) {

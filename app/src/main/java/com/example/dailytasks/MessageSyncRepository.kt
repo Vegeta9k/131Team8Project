@@ -14,6 +14,7 @@ class MessageSyncRepository(
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
 ) {
     private val messagesCollection = firestore.collection(MESSAGES_COLLECTION)
+    private val usersCollection = firestore.collection(USERS_COLLECTION)
 
     fun currentUserId(): String? = auth.currentUser?.uid
     fun currentUserEmail(): String? = auth.currentUser?.email
@@ -28,18 +29,48 @@ class MessageSyncRepository(
         return result.user?.uid ?: error("Anonymous authentication failed.")
     }
 
-    suspend fun registerWithEmailPassword(email: String, password: String): Result<String> {
-        val trimmed = email.trim()
-        if (trimmed.isBlank()) return Result.failure(IllegalArgumentException("Enter an email address."))
+    suspend fun fetchUsernameForUid(uid: String): String? {
+        if (uid.isBlank()) return null
+        return runCatching {
+            val doc = usersCollection.document(uid).get().await()
+            if (!doc.exists()) return@runCatching null
+            doc.getString("username")?.takeIf { it.isNotBlank() }
+        }.getOrNull()
+    }
+
+    suspend fun refreshCurrentUsername(): String? {
+        val uid = currentUserId() ?: return null
+        if (isGuestUser()) return null
+        return fetchUsernameForUid(uid)
+    }
+
+    suspend fun registerWithEmailPassword(
+        email: String,
+        password: String,
+        username: String
+    ): Result<String> {
+        val trimmedEmail = email.trim()
+        if (trimmedEmail.isBlank()) return Result.failure(IllegalArgumentException("Enter an email address."))
         if (password.isBlank()) return Result.failure(IllegalArgumentException("Enter a password."))
         if (!isPasswordValid(password)) {
             return Result.failure(
                 IllegalArgumentException("Password must be at least $MIN_PASSWORD_LENGTH characters and include uppercase, lowercase, number, and special character.")
             )
         }
+        val normalizedUsername = runCatching { normalizeAndValidateUsername(username) }
+            .getOrElse { return Result.failure(it) }
         return runCatching {
-            val result = auth.createUserWithEmailAndPassword(trimmed, password).await()
-            result.user?.uid ?: error("Registration failed.")
+            checkUsernameStillAvailable(normalizedUsername).getOrElse { throw it }
+
+            val result = auth.createUserWithEmailAndPassword(trimmedEmail, password).await()
+            val uid = result.user?.uid ?: error("Registration failed.")
+
+            val profile = mapOf(
+                "username" to normalizedUsername,
+                "usernameLower" to normalizedUsername.lowercase()
+            )
+            usersCollection.document(uid).set(profile).await()
+            uid
         }.mapError(::toFriendlyAuthError)
     }
 
@@ -64,12 +95,20 @@ class MessageSyncRepository(
             )
         }
         val uid = runCatching { ensureSignedIn() }.getOrElse { return Result.failure(it) }
+        val authorUsername =
+            fetchUsernameForUid(uid).takeUnless { it.isNullOrBlank() }
+                ?: auth.currentUser?.email
+                    ?.substringBefore('@')
+                    ?.trim()
+                    ?.takeUnless { it.isBlank() }
+                ?: "Member"
         val payload = mapOf(
             "text" to text,
             "latitude" to latitude,
             "longitude" to longitude,
             "createdAtEpochMs" to System.currentTimeMillis(),
             "authorId" to uid,
+            "authorUsername" to authorUsername,
             "upvotes" to 0L,
             "downvotes" to 0L,
             "rating" to 0L
@@ -225,6 +264,7 @@ class MessageSyncRepository(
                         longitude = document.getDouble("longitude") ?: 0.0,
                         createdAtEpochMs = document.getLong("createdAtEpochMs") ?: 0L,
                         authorId = document.getString("authorId").orEmpty(),
+                        authorUsername = document.getString("authorUsername").orEmpty(),
                         upvotes = document.getLong("upvotes") ?: 0L,
                         downvotes = document.getLong("downvotes") ?: 0L,
                         rating = document.getLong("rating") ?: 0L
@@ -237,11 +277,46 @@ class MessageSyncRepository(
         awaitClose { listener.remove() }
     }
 
+    private fun normalizeAndValidateUsername(raw: String): String {
+        val trimmed = raw.trim()
+        if (trimmed.length < USERNAME_MIN_LENGTH) {
+            throw IllegalArgumentException("Username must be at least $USERNAME_MIN_LENGTH characters.")
+        }
+        if (trimmed.length > USERNAME_MAX_LENGTH) {
+            throw IllegalArgumentException("Username can't be longer than $USERNAME_MAX_LENGTH characters.")
+        }
+        if ('\n' in trimmed || '\t' in trimmed || '\r' in trimmed) {
+            throw IllegalArgumentException("Username can't include line breaks.")
+        }
+        if (!USERNAME_ALLOWED_PATTERN.matches(trimmed)) {
+            throw IllegalArgumentException(
+                "Username can use letters, numbers, spaces, apostrophes, underscores, or hyphens only."
+            )
+        }
+        return trimmed
+    }
+
+    private suspend fun checkUsernameStillAvailable(normalizedUsername: String): Result<Unit> {
+        val lowered = normalizedUsername.lowercase()
+        val snapshot =
+            usersCollection.whereEqualTo("usernameLower", lowered).limit(1).get().await()
+        val conflictingId = snapshot.documents.firstOrNull()?.id ?: return Result.success(Unit)
+        if (conflictingId.isNotBlank() && conflictingId != currentUserId()) {
+            return Result.failure(IllegalStateException("That username is already taken. Choose another."))
+        }
+        return Result.success(Unit)
+    }
+
     companion object {
         private const val MESSAGES_COLLECTION = "messages"
+        private const val USERS_COLLECTION = "users"
         private const val VOTES_COLLECTION = "votes"
         private const val AUTO_DELETE_RATING_THRESHOLD = -2L
         private const val MIN_PASSWORD_LENGTH = 8
+        private const val USERNAME_MIN_LENGTH = 2
+        private const val USERNAME_MAX_LENGTH = 30
+        private val USERNAME_ALLOWED_PATTERN =
+            Regex("^[\\p{L}\\p{N}]{2}$|^[\\p{L}\\p{N}][\\p{L}\\p{N} _'-]*[\\p{L}\\p{N}]$")
     }
 
     private fun isPasswordValid(password: String): Boolean {
