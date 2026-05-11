@@ -76,6 +76,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _myMessagesSortOrder = MutableStateFlow(MyMessagesSortOrder.DATE)
     val myMessagesSortOrder: StateFlow<MyMessagesSortOrder> = _myMessagesSortOrder.asStateFlow()
     private var messagesObserverJob: Job? = null
+    private var knownUpvotes: Map<String, Long> = emptyMap()
 
     val nearbyMessages = combine(messages, userLatLng) { allMessages, user ->
         if (user == null) {
@@ -396,10 +397,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val repo = repository ?: return
         if (!_isSignedIn.value) return
         if (messagesObserverJob?.isActive == true) return
+        knownUpvotes = emptyMap()
         messagesObserverJob = viewModelScope.launch {
             repo.observeMessages().collect { result ->
                 result
                     .onSuccess { cloudMessages ->
+                        checkForNewUpvotes(cloudMessages)
                         _messages.value = cloudMessages
                         pruneReadMessageIds(cloudMessages.map { it.id }.toSet())
                         _syncError.value = null
@@ -411,9 +414,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private fun checkForNewUpvotes(cloudMessages: List<LocationMessage>) {
+        val uid = _currentUserId.value ?: return
+        val context = getApplication<Application>()
+        cloudMessages
+            .filter { it.authorId == uid }
+            .forEach { message ->
+                val previous = knownUpvotes[message.id]
+                if (previous != null && message.upvotes > previous) {
+                    UpvoteNotifier.notifyUpvote(context, message.text)
+                }
+            }
+        knownUpvotes = cloudMessages.associate { it.id to it.upvotes }
+    }
+
     private fun stopObservingMessages() {
         messagesObserverJob?.cancel()
         messagesObserverJob = null
+        knownUpvotes = emptyMap()
     }
 
     fun canReadMessage(message: LocationMessage): Boolean {
