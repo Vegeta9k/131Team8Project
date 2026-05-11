@@ -2,6 +2,7 @@ package com.example.dailytasks
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -18,6 +19,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.annotation.DrawableRes
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Box
@@ -29,10 +31,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -59,15 +65,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.android.gms.location.LocationCallback
@@ -87,6 +97,9 @@ import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 private data class MessageMapMarkerIcons(
     val unread: BitmapDescriptor,
@@ -165,16 +178,52 @@ private fun AppRoot(viewModel: MainViewModel = viewModel()) {
     val shouldEnterMainApp = isSignedIn || isGuest
 
     MaterialTheme(colorScheme = if (darkThemeEnabled) darkColorScheme() else lightColorScheme()) {
+        VisibleSystemBarsEffect(darkThemeEnabled = darkThemeEnabled)
+
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
         ) {
-            when {
-                !authStateResolved -> LoadingScreen()
-                !shouldEnterMainApp -> LoginScreen(viewModel = viewModel, onAuthenticated = {})
-                else -> AppScreen(viewModel = viewModel, onLogout = {})
+            Box(modifier = Modifier.fillMaxSize()) {
+                when {
+                    !authStateResolved -> LoadingScreen()
+                    !shouldEnterMainApp -> LoginScreen(viewModel = viewModel, onAuthenticated = {})
+                    else -> AppScreen(viewModel = viewModel, onLogout = {})
+                }
+                StatusBarBackdrop(modifier = Modifier.align(Alignment.TopCenter))
             }
         }
+    }
+}
+
+@Composable
+private fun StatusBarBackdrop(modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(WindowInsets.statusBars.asPaddingValues().calculateTopPadding()),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.97f),
+        shadowElevation = 4.dp
+    ) {}
+}
+
+@Composable
+private fun VisibleSystemBarsEffect(darkThemeEnabled: Boolean) {
+    val view = LocalView.current
+    val colorScheme = MaterialTheme.colorScheme
+
+    DisposableEffect(view, colorScheme.surface, darkThemeEnabled) {
+        val window = (view.context as? Activity)?.window
+        if (window != null) {
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+            window.statusBarColor = Color.Transparent.toArgb()
+            window.navigationBarColor = colorScheme.surface.toArgb()
+            WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars = !darkThemeEnabled
+                isAppearanceLightNavigationBars = !darkThemeEnabled
+            }
+        }
+        onDispose { }
     }
 }
 
@@ -241,6 +290,21 @@ private fun LoginScreen(
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        if (authDestination != AuthDestination.HOME) {
+            AuthBackButton(
+                onClick = {
+                    when (authDestination) {
+                        AuthDestination.FORGOT_PASSWORD -> authDestination = AuthDestination.LOGIN
+                        else -> authDestination = AuthDestination.HOME
+                    }
+                    viewModel.clearSyncError()
+                },
+                enabled = !isBusy,
+                modifier = Modifier.align(Alignment.Start)
+            )
+        } else {
+            Spacer(modifier = Modifier.height(48.dp))
+        }
         AuthHeader()
         Spacer(modifier = Modifier.height(24.dp))
 
@@ -285,16 +349,6 @@ private fun LoginScreen(
             }
 
             AuthDestination.LOGIN -> {
-                TextButton(
-                    onClick = {
-                        viewModel.clearSyncError()
-                        authDestination = AuthDestination.HOME
-                    },
-                    enabled = !isBusy,
-                    modifier = Modifier.align(Alignment.Start)
-                ) {
-                    Text("Back")
-                }
                 OutlinedTextField(
                     value = email,
                     onValueChange = {
@@ -346,16 +400,6 @@ private fun LoginScreen(
                 val passwordsMatch = confirmPassword == password
                 val passwordValid = isPasswordValid(password)
 
-                TextButton(
-                    onClick = {
-                        viewModel.clearSyncError()
-                        authDestination = AuthDestination.HOME
-                    },
-                    enabled = !isBusy,
-                    modifier = Modifier.align(Alignment.Start)
-                ) {
-                    Text("Back")
-                }
                 OutlinedTextField(
                     value = username,
                     onValueChange = {
@@ -442,16 +486,6 @@ private fun LoginScreen(
             }
 
             AuthDestination.FORGOT_PASSWORD -> {
-                TextButton(
-                    onClick = {
-                        viewModel.clearSyncError()
-                        authDestination = AuthDestination.LOGIN
-                    },
-                    enabled = !isBusy,
-                    modifier = Modifier.align(Alignment.Start)
-                ) {
-                    Text("Back")
-                }
                 OutlinedTextField(
                     value = email,
                     onValueChange = {
@@ -519,6 +553,25 @@ private fun AuthHeader() {
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
+}
+
+@Composable
+private fun AuthBackButton(
+    onClick: () -> Unit,
+    enabled: Boolean,
+    modifier: Modifier = Modifier
+) {
+    TextButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier
+    ) {
+        Text(
+            text = "<",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold
+        )
+    }
 }
 
 // Shows the password rules one at a time.
@@ -599,7 +652,14 @@ private fun AppScreen(
             LocationMessagesScreen(
                 viewModel = viewModel,
                 onOpenSettings = { destination = AppDestination.SETTINGS },
-                onOpenMyMessages = { destination = AppDestination.MY_MESSAGES }
+                onOpenMyMessages = { destination = AppDestination.MY_MESSAGES },
+                onOpenAccount = { destination = AppDestination.ACCOUNT }
+            )
+        }
+        AppDestination.ACCOUNT -> {
+            AccountScreen(
+                viewModel = viewModel,
+                onBack = { destination = AppDestination.MAIN }
             )
         }
         AppDestination.SETTINGS -> {
@@ -630,7 +690,8 @@ private fun AppScreen(
 private fun LocationMessagesScreen(
     viewModel: MainViewModel = viewModel(),
     onOpenSettings: () -> Unit,
-    onOpenMyMessages: () -> Unit
+    onOpenMyMessages: () -> Unit,
+    onOpenAccount: () -> Unit
 ) {
     val context = LocalContext.current
     val messages by viewModel.messages.collectAsStateWithLifecycle()
@@ -639,9 +700,9 @@ private fun LocationMessagesScreen(
     val draftText by viewModel.draftText.collectAsStateWithLifecycle()
     val selectedLatLng by viewModel.selectedLatLng.collectAsStateWithLifecycle()
     val userLatLng by viewModel.userLatLng.collectAsStateWithLifecycle()
-    val isSignedIn by viewModel.isSignedIn.collectAsStateWithLifecycle()
     val isGuest by viewModel.isGuest.collectAsStateWithLifecycle()
     val isAdmin by viewModel.isAdmin.collectAsStateWithLifecycle()
+    val currentUsername by viewModel.currentUsername.collectAsStateWithLifecycle()
     val syncError by viewModel.syncError.collectAsStateWithLifecycle()
     var permissionsGranted by remember { mutableStateOf(hasLocationPermission(context)) }
     val cameraPositionState = rememberCameraPositionState()
@@ -706,68 +767,18 @@ private fun LocationMessagesScreen(
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(start = 12.dp, top = 4.dp, end = 12.dp, bottom = 12.dp)
         ) {
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                tonalElevation = 6.dp,
-                shadowElevation = 6.dp
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .statusBarsPadding()
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        if (!isGuest) {
-                            TextButton(onClick = onOpenMyMessages) {
-                                Text("My Messages")
-                            }
-                        } else {
-                            Text(
-                                text = "Guest mode",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        TextButton(onClick = onOpenSettings) {
-                            Text("Settings")
-                        }
-                    }
-                    Text("Tap a bottle to view a message", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        text = if (isSignedIn && syncError.isNullOrBlank()) {
-                            "Cloud connected"
-                        } else {
-                            "Cloud not connected"
-                        },
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                    if (isGuest) {
-                        Text(
-                            text = "Guests can browse the map only. Writing, voting, and deleting require an account.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    if (!syncError.isNullOrBlank()) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(
-                                text = syncError ?: "",
-                                style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.weight(1f)
-                            )
-                            TextButton(onClick = viewModel::clearSyncError) {
-                                Text("Dismiss")
-                            }
-                        }
-                    }
-                }
-            }
+            MapHeaderBlock(
+                isGuest = isGuest,
+                username = currentUsername,
+                syncError = syncError,
+                onOpenMyMessages = onOpenMyMessages,
+                onOpenSettings = onOpenSettings,
+                onOpenAccount = onOpenAccount,
+                onDismissSyncError = viewModel::clearSyncError
+            )
         }
 
         Column(
@@ -793,6 +804,7 @@ private fun LocationMessagesScreen(
                     onDownvote = { viewModel.downvoteMessage(message) },
                     onDelete = { viewModel.deleteMessage(message) },
                     footerText = "Tap card to close",
+                    compact = true,
                     modifier = Modifier.clickable {
                         if (popupMessageId == message.id) {
                             popupMessageId = null
@@ -801,7 +813,14 @@ private fun LocationMessagesScreen(
                 )
             }
 
-            Card(modifier = Modifier.fillMaxWidth()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
+            ) {
                 Column(
                     modifier = Modifier.padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -875,6 +894,244 @@ private fun LocationMessagesScreen(
 }
 
 @Composable
+private fun MapHeaderBlock(
+    isGuest: Boolean,
+    username: String,
+    syncError: String?,
+    onOpenMyMessages: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onOpenAccount: () -> Unit,
+    onDismissSyncError: () -> Unit
+) {
+    val displayName = if (isGuest) {
+        "Guest"
+    } else {
+        username.trim().ifBlank { "Signed in" }
+    }
+    val subtitle = if (isGuest) "Browse only" else "Account"
+    val instructionText = if (isGuest) {
+        "Tap a bottle to view a message. Writing and voting require an account."
+    } else {
+        "Tap a bottle to view a message."
+    }
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.97f),
+        tonalElevation = 8.dp,
+        shadowElevation = 12.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable(onClick = onOpenAccount),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        modifier = Modifier.size(44.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Image(
+                                painter = painterResource(id = R.drawable.ic_profile_quill),
+                                contentDescription = null,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = displayName,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = subtitle,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    if (!isGuest) {
+                        TextButton(onClick = onOpenMyMessages) {
+                            Text("Messages")
+                        }
+                    }
+                    TextButton(onClick = onOpenSettings) {
+                        Text("Settings")
+                    }
+                }
+            }
+
+            Text(
+                text = instructionText,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            if (!syncError.isNullOrBlank()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = syncError,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(onClick = onDismissSyncError) {
+                        Text("Dismiss")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AccountScreen(
+    viewModel: MainViewModel = viewModel(),
+    onBack: () -> Unit
+) {
+    BackHandler(onBack = onBack)
+
+    val isGuest by viewModel.isGuest.collectAsStateWithLifecycle()
+    val isAdmin by viewModel.isAdmin.collectAsStateWithLifecycle()
+    val username by viewModel.currentUsername.collectAsStateWithLifecycle()
+    val email by viewModel.currentUserEmail.collectAsStateWithLifecycle()
+    val userId by viewModel.currentUserId.collectAsStateWithLifecycle()
+    val myMessages by viewModel.myMessages.collectAsStateWithLifecycle()
+
+    val displayName = if (isGuest) {
+        "Guest"
+    } else {
+        username.trim().ifBlank { "Signed in" }
+    }
+    val accountType = when {
+        isGuest -> "Guest"
+        isAdmin -> "Admin"
+        else -> "Registered"
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Account", style = MaterialTheme.typography.headlineSmall)
+            TextButton(onClick = onBack) {
+                Text("Back")
+            }
+        }
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        modifier = Modifier.size(56.dp),
+                        shape = RoundedCornerShape(18.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Image(
+                                painter = painterResource(id = R.drawable.ic_profile_quill),
+                                contentDescription = null,
+                                modifier = Modifier.size(34.dp)
+                            )
+                        }
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = displayName,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = accountType,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                AccountInfoRow(label = "Username", value = displayName)
+                AccountInfoRow(
+                    label = "Email",
+                    value = if (isGuest) "Guest accounts do not have an email." else email.ifBlank { "Unavailable" }
+                )
+                AccountInfoRow(label = "Messages posted", value = myMessages.size.toString())
+                AccountInfoRow(label = "Permissions", value = if (isAdmin) "Admin controls enabled" else "Standard access")
+                AccountInfoRow(label = "User ID", value = userId.orEmpty().ifBlank { "Not available" })
+            }
+        }
+    }
+}
+
+@Composable
+private fun AccountInfoRow(
+    label: String,
+    value: String
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyLarge,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
 private fun MyMessagesScreen(
     viewModel: MainViewModel = viewModel(),
     onBack: () -> Unit
@@ -896,7 +1153,7 @@ private fun MyMessagesScreen(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text("My Messages", style = MaterialTheme.typography.headlineSmall)
+            Text("Messages", style = MaterialTheme.typography.headlineSmall)
             TextButton(onClick = onBack) {
                 Text("Back")
             }
@@ -946,7 +1203,7 @@ private fun MyMessagesScreen(
     }
 }
 
-// Shared card for map messages and "My Messages".
+// Shared card for map messages and "Messages".
 @Composable
 private fun MessageCard(
     message: LocationMessage,
@@ -960,60 +1217,157 @@ private fun MessageCard(
     onDelete: () -> Unit,
     showDeleteButton: Boolean = canDelete,
     modifier: Modifier = Modifier,
-    footerText: String? = null
+    footerText: String? = null,
+    compact: Boolean = false
 ) {
     val accent = rememberMessageAccent(message.displayedPoints)
+    val cardPadding = if (compact) 8.dp else 12.dp
+    val itemSpacing = if (compact) 6.dp else 10.dp
+    val messageTextStyle = if (compact) {
+        MaterialTheme.typography.bodyMedium
+    } else {
+        MaterialTheme.typography.bodyLarge
+    }
 
     Card(
         modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
         border = accent.border,
-        colors = CardDefaults.cardColors(containerColor = accent.containerColor)
+        colors = CardDefaults.cardColors(containerColor = accent.containerColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.padding(cardPadding),
+            verticalArrangement = Arrangement.spacedBy(itemSpacing)
         ) {
-            MessageAuthorBadge(authorDisplayName = authorDisplayName)
-            MessagePointsText(points = message.displayedPoints)
+            MessageCardHeader(
+                authorDisplayName = authorDisplayName,
+                postedDate = formatPostedDate(message.createdAtEpochMs),
+                points = message.displayedPoints,
+                compact = compact
+            )
 
-            if (canRead) {
-                Text(visibleText, style = MaterialTheme.typography.bodyLarge)
-            } else {
-                Text(
-                    text = "Move within 150m of this pin to read and rate it.",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            Text(
+                text = if (canRead) visibleText else "Move within 150m of this pin to read and rate it.",
+                style = messageTextStyle,
+                color = if (canRead) {
+                    MaterialTheme.colorScheme.onSurface
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                }
+            )
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onUpvote, enabled = canVote) {
-                    Text("Upvote")
-                }
-                Button(onClick = onDownvote, enabled = canVote) {
-                    Text("Downvote")
-                }
-            }
-
-            if (showDeleteButton) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    TextButton(
-                        onClick = onDelete,
-                        enabled = canDelete
-                    ) {
-                        Text("Delete")
-                    }
-                }
-            }
+            MessageActionsRow(
+                canVote = canVote,
+                showDeleteButton = showDeleteButton,
+                canDelete = canDelete,
+                onUpvote = onUpvote,
+                onDownvote = onDownvote,
+                onDelete = onDelete
+            )
 
             footerText?.let {
-                Text(it, style = MaterialTheme.typography.bodySmall)
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                )
             }
         }
     }
+}
+
+@Composable
+private fun MessageCardHeader(
+    authorDisplayName: String,
+    postedDate: String,
+    points: Long,
+    compact: Boolean
+) {
+    val accent = rememberMessageAccent(points)
+    val pointsColor = accent.glowColor ?: MaterialTheme.colorScheme.primary
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Top
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = authorDisplayName,
+                style = if (compact) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = postedDate,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
+            )
+        }
+
+        Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = pointsColor.copy(alpha = 0.12f)
+        ) {
+            Text(
+                text = "$points pts",
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                style = MaterialTheme.typography.labelMedium,
+                color = pointsColor,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+@Composable
+private fun MessageActionsRow(
+    canVote: Boolean,
+    showDeleteButton: Boolean,
+    canDelete: Boolean,
+    onUpvote: () -> Unit,
+    onDownvote: () -> Unit,
+    onDelete: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Button(
+            onClick = onUpvote,
+            enabled = canVote,
+            modifier = Modifier.weight(1f),
+            shape = RoundedCornerShape(8.dp)
+        ) {
+            Text("Upvote")
+        }
+        OutlinedButton(
+            onClick = onDownvote,
+            enabled = canVote,
+            modifier = Modifier.weight(1f),
+            shape = RoundedCornerShape(8.dp)
+        ) {
+            Text("Downvote")
+        }
+        if (showDeleteButton) {
+            TextButton(
+                onClick = onDelete,
+                enabled = canDelete
+            ) {
+                Text("Delete")
+            }
+        }
+    }
+}
+
+private fun formatPostedDate(createdAtEpochMs: Long): String {
+    if (createdAtEpochMs <= 0L) return "Unknown date"
+    return SimpleDateFormat("MMM d, h:mm a", Locale.US).format(Date(createdAtEpochMs))
 }
 
 private data class MessageAccent(
@@ -1026,14 +1380,15 @@ private data class MessageAccent(
 private fun rememberMessageAccent(points: Long): MessageAccent {
     val colorScheme = MaterialTheme.colorScheme
     val glowColor = when {
-        points >= 100L -> Color(0xFFD4AF37)
-        points >= 50L -> Color(0xFFC0C0C0)
-        points >= 10L -> Color(0xFFCD7F32)
+        points >= 100L -> Color(0xFFC9A227)
+        points >= 50L -> Color(0xFFC56A00)
+        points >= 25L -> Color(0xFF1E6FA8)
+        points >= 10L -> Color(0xFF2E7D32)
         else -> null
     }
 
-    return remember(points, colorScheme.surfaceVariant, glowColor) {
-        val baseContainer = colorScheme.surfaceVariant
+    return remember(points, colorScheme.surface, glowColor) {
+        val baseContainer = colorScheme.surface.copy(alpha = 0.94f)
         if (glowColor == null) {
             MessageAccent(
                 glowColor = null,
@@ -1043,13 +1398,15 @@ private fun rememberMessageAccent(points: Long): MessageAccent {
         } else {
             val borderAlpha = when {
                 points >= 100L -> 0.9f
-                points >= 50L -> 0.8f
-                else -> 0.7f
+                points >= 50L -> 0.78f
+                points >= 25L -> 0.72f
+                else -> 0.45f
             }
             val containerAlpha = when {
                 points >= 100L -> 0.22f
-                points >= 50L -> 0.18f
-                else -> 0.12f
+                points >= 50L -> 0.16f
+                points >= 25L -> 0.14f
+                else -> 0.08f
             }
             val borderWidth = when {
                 points >= 100L -> 3.dp
@@ -1063,33 +1420,6 @@ private fun rememberMessageAccent(points: Long): MessageAccent {
             )
         }
     }
-}
-
-@Composable
-private fun MessagePointsText(points: Long) {
-    val accent = rememberMessageAccent(points)
-    val glowColor = accent.glowColor
-    val textStyle = if (glowColor == null) {
-        MaterialTheme.typography.bodyMedium
-    } else {
-        MaterialTheme.typography.bodyMedium.copy(
-            color = glowColor,
-            shadow = Shadow(
-                color = glowColor.copy(alpha = 0.9f),
-                offset = Offset.Zero,
-                blurRadius = when {
-                    points >= 100L -> 28f
-                    points >= 50L -> 22f
-                    else -> 16f
-                }
-            )
-        )
-    }
-
-    Text(
-        text = "Points: $points",
-        style = textStyle
-    )
 }
 
 @Composable
@@ -1306,33 +1636,9 @@ private fun MapSection(
 
 private const val AUTH_USERNAME_PREVIEW_MIN_LENGTH = 2
 
-@Composable
-private fun MessageAuthorBadge(authorDisplayName: String) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f),
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Text(
-                text = "From",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.75f)
-            )
-            Text(
-                text = authorDisplayName,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSecondaryContainer
-            )
-        }
-    }
-}
-
 private enum class AppDestination {
     MAIN,
+    ACCOUNT,
     SETTINGS,
     MY_MESSAGES
 }

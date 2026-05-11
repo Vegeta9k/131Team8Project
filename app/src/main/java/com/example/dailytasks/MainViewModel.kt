@@ -60,6 +60,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _currentUsername = MutableStateFlow("")
     val currentUsername: StateFlow<String> = _currentUsername.asStateFlow()
 
+    private val _currentUserEmail = MutableStateFlow("")
+    val currentUserEmail: StateFlow<String> = _currentUserEmail.asStateFlow()
+
     private val _syncError = MutableStateFlow<String?>(null)
     val syncError: StateFlow<String?> = _syncError.asStateFlow()
 
@@ -132,6 +135,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _isGuest.value = true
             _isAdmin.value = false
             _currentUserId.value = null
+            _currentUserEmail.value = ""
             onFinished(true)
             return
         }
@@ -143,7 +147,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         uid = uid,
                         isGuest = repo.isGuestUser(),
                         isAdmin = resolveIsAdmin(repo),
-                        username = ""
+                        username = "",
+                        email = repo.currentUserEmail().orEmpty()
                     )
                     startObservingMessages()
                     onFinished(true)
@@ -175,7 +180,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         uid = uid,
                         isGuest = false,
                         isAdmin = resolveIsAdmin(repo),
-                        username = repo.refreshCurrentUsername().orEmpty()
+                        username = repo.refreshCurrentUsername().orEmpty(),
+                        email = repo.currentUserEmail().orEmpty()
                     )
                     startObservingMessages()
                     onFinished(true)
@@ -202,7 +208,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         uid = uid,
                         isGuest = false,
                         isAdmin = resolveIsAdmin(repo),
-                        username = repo.refreshCurrentUsername().orEmpty()
+                        username = repo.refreshCurrentUsername().orEmpty(),
+                        email = repo.currentUserEmail().orEmpty()
                     )
                     startObservingMessages()
 
@@ -244,6 +251,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _isAdmin.value = false
         _currentUserId.value = null
         _currentUsername.value = ""
+        _currentUserEmail.value = ""
         _selectedLatLng.value = null
         _syncError.value = null
         clearReadMessageIds()
@@ -419,6 +427,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _isGuest.value = repo.isGuestUser()
         _isAdmin.value = resolveIsAdmin(repo)
         _currentUserId.value = existingUid
+        _currentUserEmail.value = repo.currentUserEmail().orEmpty()
         _authStateResolved.value = true
     }
 
@@ -426,13 +435,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         uid: String,
         isGuest: Boolean,
         isAdmin: Boolean,
-        username: String
+        username: String,
+        email: String
     ) {
         _isSignedIn.value = true
         _isGuest.value = isGuest
         _isAdmin.value = isAdmin
         _currentUserId.value = uid
         _currentUsername.value = username
+        _currentUserEmail.value = email
         _syncError.value = null
     }
 
@@ -442,6 +453,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _isAdmin.value = false
         _currentUserId.value = null
         _currentUsername.value = ""
+        _currentUserEmail.value = ""
         _syncError.value = errorMessage
     }
 
