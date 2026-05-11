@@ -747,13 +747,14 @@ private fun LocationMessagesScreen(
                     ) {
                         MessageAuthorBadge(authorDisplayName = viewModel.displayAuthorUsername(message))
                         MessagePointsText(points = message.displayedPoints)
-                        Text(viewModel.displayMessageText(message), style = MaterialTheme.typography.bodyLarge)
                         if (!canReadMessage) {
                             Text(
                                 text = "Move within 150m of this pin to read and rate it.",
-                                style = MaterialTheme.typography.bodySmall,
+                                style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                        } else {
+                            Text(viewModel.displayMessageText(message), style = MaterialTheme.typography.bodyLarge)
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(
@@ -924,13 +925,14 @@ private fun MyMessagesScreen(
                     Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         MessageAuthorBadge(authorDisplayName = viewModel.displayAuthorUsername(message))
                         MessagePointsText(points = message.displayedPoints)
-                        Text(viewModel.displayMyMessageText(message), style = MaterialTheme.typography.bodyLarge)
                         if (!canReadMessage) {
                             Text(
                                 text = "Move within 150m of this pin to read and rate it.",
-                                style = MaterialTheme.typography.bodySmall,
+                                style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                        } else {
+                            Text(viewModel.displayMyMessageText(message), style = MaterialTheme.typography.bodyLarge)
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(

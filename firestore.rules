@@ -49,5 +49,10 @@ service cloud.firestore {
       // Allow password reset operations (temporary - for demo purposes)
       allow read, write: if true;
     }
+
+    match /users/{userId} {
+      // Allow users to read and write their own profile data
+      allow read, write: if isAuthed() && request.auth.uid == userId;
+    }
   }
 }
