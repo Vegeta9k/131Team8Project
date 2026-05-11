@@ -7,7 +7,7 @@ data class LocationMessage(
     val longitude: Double = 0.0,
     val createdAtEpochMs: Long = 0L,
     val authorId: String = "",
-    /** Display name copied from the author's profile when the message was posted. */
+    // Public name saved when the message was posted.
     val authorUsername: String = "",
     val upvotes: Long = 0L,
     val downvotes: Long = 0L,

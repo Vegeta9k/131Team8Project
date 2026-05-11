@@ -1,58 +1,78 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // Checks if someone is signed in.
     function isAuthed() {
       return request.auth != null;
     }
 
+    // Checks if the signed-in user is not a guest.
     function isNonAnonymousUser() {
       return isAuthed() &&
         request.auth.token.firebase.sign_in_provider != "anonymous";
     }
 
+    // Checks if the signed-in user is an admin.
     function isAdminEmail() {
       return isNonAnonymousUser() &&
         request.auth.token.email != null &&
         request.auth.token.email in ["kaisvillanueva7@gmail.com", "juandiegohurt@gmail.com"];
     }
 
+    // Checks if the signed-in user owns this message.
     function isMessageOwner() {
       return isAuthed() &&
         resource.data.authorId == request.auth.uid;
     }
 
+    // Checks if only vote fields are changing.
     function isVoteOnlyUpdate() {
       return request.resource.data.diff(resource.data)
         .affectedKeys()
         .hasOnly(["upvotes", "downvotes", "rating"]);
     }
 
+    // Rules for messages shown on the map.
     match /messages/{messageId} {
-      // Allow map pins/messages to load even before auth resolves.
+      // Anyone can read map messages.
       allow read: if true;
 
-      // Writes require a signed-in non-guest user.
+      // Signed-in users can create their own messages.
       allow create: if isNonAnonymousUser() &&
         request.resource.data.authorId == request.auth.uid;
+
+      // Signed-in users can update vote counts.
       allow update: if isNonAnonymousUser() && isVoteOnlyUpdate();
+
+      // Message owners and admins can delete messages.
       allow delete: if isMessageOwner() || isAdminEmail();
 
-      // Each user may write only their own vote document.
+      // Rules for individual user votes.
       match /votes/{userId} {
+        // Anyone can read vote documents.
         allow read: if true;
+
+        // Signed-in users can only change their own vote.
         allow create, update, delete: if isNonAnonymousUser() &&
           request.auth.uid == userId;
       }
     }
 
+    // Temporary password reset rules for the demo.
     match /passwordResets/{email} {
-      // Allow password reset operations (temporary - for demo purposes)
+      // Allow all password reset operations.
       allow read, write: if true;
     }
 
+    // Rules for public user profiles.
     match /users/{userId} {
-      // Allow users to read and write their own profile data
-      allow read, write: if isAuthed() && request.auth.uid == userId;
+      // Username checks need to read public profile names.
+      allow read: if true;
+
+      // Users can only write their own profile.
+      allow write: if isAuthed() && request.auth.uid == userId;
     }
   }
 }

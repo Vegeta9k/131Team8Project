@@ -3,6 +3,7 @@ package com.example.dailytasks
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.Query
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -65,7 +66,9 @@ class MessageSyncRepository(
         val normalizedUsername = runCatching { normalizeAndValidateUsername(username) }
             .getOrElse { return Result.failure(it) }
         return runCatching {
-            checkUsernameStillAvailable(normalizedUsername).getOrElse { throw it }
+            checkUsernameStillAvailable(normalizedUsername).getOrElse { error ->
+                if (!error.isPermissionDenied()) throw error
+            }
 
             val result = auth.createUserWithEmailAndPassword(trimmedEmail, password).await()
             val uid = result.user?.uid ?: error("Registration failed.")
@@ -372,5 +375,10 @@ class MessageSyncRepository(
             onSuccess = { Result.success(it) },
             onFailure = { Result.failure(transform(it)) }
         )
+    }
+
+    private fun Throwable.isPermissionDenied(): Boolean {
+        return this is FirebaseFirestoreException &&
+            code == FirebaseFirestoreException.Code.PERMISSION_DENIED
     }
 }

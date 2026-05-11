@@ -112,58 +112,78 @@ private fun bitmapDescriptorFromDrawable(
     return BitmapDescriptorFactory.fromBitmap(bitmap)
 }
 
+// Entry point for the app.
 class MainActivity : ComponentActivity() {
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Marker icons are created during composition, so initialize Maps first.
+
+        // Initialize Maps and upvote notifications.
         MapsInitializer.initialize(this)
         UpvoteNotifier.createChannel(this)
+
         setContent {
-            val viewModel: MainViewModel = viewModel()
-            val context = LocalContext.current
-            val notificationPermissionLauncher = rememberLauncherForActivityResult(
-                ActivityResultContracts.RequestPermission()
-            ) {}
-            LaunchedEffect(Unit) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                    ContextCompat.checkSelfPermission(
-                        context, Manifest.permission.POST_NOTIFICATIONS
-                    ) != PackageManager.PERMISSION_GRANTED
-                ) {
-                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                }
-            }
-            val darkThemeEnabled by viewModel.darkThemeEnabled.collectAsStateWithLifecycle()
-            val authStateResolved by viewModel.authStateResolved.collectAsStateWithLifecycle()
-            val isSignedIn by viewModel.isSignedIn.collectAsStateWithLifecycle()
-            val isGuest by viewModel.isGuest.collectAsStateWithLifecycle()
-            val shouldEnterMainApp = isSignedIn || isGuest
-            MaterialTheme(colorScheme = if (darkThemeEnabled) darkColorScheme() else lightColorScheme()) {
-                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    if (!authStateResolved) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "Loading...",
-                                style = MaterialTheme.typography.bodyLarge
-                            )
-                        }
-                    } else if (!shouldEnterMainApp) {
-                        LoginScreen(
-                            viewModel = viewModel,
-                            onAuthenticated = {}
-                        )
-                    } else {
-                        AppScreen(
-                            viewModel = viewModel,
-                            onLogout = {}
-                        )
-                    }
-                }
+            AppRoot()
+        }
+    }
+}
+
+// Chooses between loading, login, and the main app.
+@Composable
+private fun AppRoot(viewModel: MainViewModel = viewModel()) {
+    NotificationPermissionEffect()
+
+    val darkThemeEnabled by viewModel.darkThemeEnabled.collectAsStateWithLifecycle()
+    val authStateResolved by viewModel.authStateResolved.collectAsStateWithLifecycle()
+    val isSignedIn by viewModel.isSignedIn.collectAsStateWithLifecycle()
+    val isGuest by viewModel.isGuest.collectAsStateWithLifecycle()
+    val shouldEnterMainApp = isSignedIn || isGuest
+
+    MaterialTheme(colorScheme = if (darkThemeEnabled) darkColorScheme() else lightColorScheme()) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
+        ) {
+            when {
+                !authStateResolved -> LoadingScreen()
+                !shouldEnterMainApp -> LoginScreen(viewModel = viewModel, onAuthenticated = {})
+                else -> AppScreen(viewModel = viewModel, onLogout = {})
             }
         }
+    }
+}
+
+// Requests notification permission on Android 13+.
+@Composable
+private fun NotificationPermissionEffect() {
+    val context = LocalContext.current
+    val launcher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) {}
+
+    LaunchedEffect(Unit) {
+        val needsNotificationPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED
+
+        if (needsNotificationPermission) {
+            launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+}
+
+@Composable
+private fun LoadingScreen() {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "Loading...",
+            style = MaterialTheme.typography.bodyLarge
+        )
     }
 }
 
@@ -179,7 +199,6 @@ private fun LoginScreen(
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
-    var resetCode by remember { mutableStateOf("") }
 
     BackHandler(enabled = authDestination != AuthDestination.HOME) {
         when (authDestination) {
@@ -197,17 +216,7 @@ private fun LoginScreen(
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(modifier = Modifier.height(24.dp))
-        Text(
-            text = "Message In a Bottle",
-            style = MaterialTheme.typography.headlineMedium
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-            text = "Please continue to register, login, or guest login below.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        AuthHeader()
         Spacer(modifier = Modifier.height(24.dp))
 
         when (authDestination) {
@@ -311,11 +320,6 @@ private fun LoginScreen(
             AuthDestination.REGISTER -> {
                 val passwordsMatch = confirmPassword == password
                 val passwordValid = isPasswordValid(password)
-                val passwordLengthValid = password.length >= PASSWORD_REQUIREMENT_MIN_LENGTH
-                val passwordHasUppercase = password.any { it.isUpperCase() }
-                val passwordHasLowercase = password.any { it.isLowerCase() }
-                val passwordHasDigit = password.any { it.isDigit() }
-                val passwordHasSpecial = password.any { !it.isLetterOrDigit() }
 
                 TextButton(
                     onClick = {
@@ -383,64 +387,7 @@ private fun LoginScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        text = "Password requirements:",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.align(Alignment.Start)
-                    )
-                    Text(
-                        text = "${if (passwordLengthValid) "✓" else "•"} At least $PASSWORD_REQUIREMENT_MIN_LENGTH characters",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = when {
-                            password.isEmpty() -> MaterialTheme.colorScheme.onSurfaceVariant
-                            passwordLengthValid -> MaterialTheme.colorScheme.primary
-                            else -> MaterialTheme.colorScheme.error
-                        },
-                        modifier = Modifier.align(Alignment.Start)
-                    )
-                    Text(
-                        text = "${if (passwordHasUppercase) "✓" else "•"} One uppercase letter",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = when {
-                            password.isEmpty() -> MaterialTheme.colorScheme.onSurfaceVariant
-                            passwordHasUppercase -> MaterialTheme.colorScheme.primary
-                            else -> MaterialTheme.colorScheme.error
-                        },
-                        modifier = Modifier.align(Alignment.Start)
-                    )
-                    Text(
-                        text = "${if (passwordHasLowercase) "✓" else "•"} One lowercase letter",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = when {
-                            password.isEmpty() -> MaterialTheme.colorScheme.onSurfaceVariant
-                            passwordHasLowercase -> MaterialTheme.colorScheme.primary
-                            else -> MaterialTheme.colorScheme.error
-                        },
-                        modifier = Modifier.align(Alignment.Start)
-                    )
-                    Text(
-                        text = "${if (passwordHasDigit) "✓" else "•"} One number",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = when {
-                            password.isEmpty() -> MaterialTheme.colorScheme.onSurfaceVariant
-                            passwordHasDigit -> MaterialTheme.colorScheme.primary
-                            else -> MaterialTheme.colorScheme.error
-                        },
-                        modifier = Modifier.align(Alignment.Start)
-                    )
-                    Text(
-                        text = "${if (passwordHasSpecial) "✓" else "•"} One special character",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = when {
-                            password.isEmpty() -> MaterialTheme.colorScheme.onSurfaceVariant
-                            passwordHasSpecial -> MaterialTheme.colorScheme.primary
-                            else -> MaterialTheme.colorScheme.error
-                        },
-                        modifier = Modifier.align(Alignment.Start)
-                    )
-                }
+                PasswordRequirements(password = password)
                 if (confirmPassword.isNotEmpty() && !passwordsMatch) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
@@ -532,6 +479,88 @@ private fun LoginScreen(
         )
     }
 }
+
+// Header used on the login and registration screens.
+@Composable
+private fun AuthHeader() {
+    Spacer(modifier = Modifier.height(24.dp))
+    Text(
+        text = "Message In a Bottle",
+        style = MaterialTheme.typography.headlineMedium
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+    Text(
+        text = "Please continue to register, login, or guest login below.",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+}
+
+// Shows the password rules one at a time.
+@Composable
+private fun PasswordRequirements(password: String) {
+    val requirements = listOf(
+        PasswordRequirement(
+            label = "At least $PASSWORD_REQUIREMENT_MIN_LENGTH characters",
+            isMet = password.length >= PASSWORD_REQUIREMENT_MIN_LENGTH
+        ),
+        PasswordRequirement(
+            label = "One uppercase letter",
+            isMet = password.any { it.isUpperCase() }
+        ),
+        PasswordRequirement(
+            label = "One lowercase letter",
+            isMet = password.any { it.isLowerCase() }
+        ),
+        PasswordRequirement(
+            label = "One number",
+            isMet = password.any { it.isDigit() }
+        ),
+        PasswordRequirement(
+            label = "One special character",
+            isMet = password.any { !it.isLetterOrDigit() }
+        )
+    )
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = "Password requirements:",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.align(Alignment.Start)
+        )
+        requirements.forEach { requirement ->
+            PasswordRequirementRow(
+                requirement = requirement,
+                passwordHasInput = password.isNotEmpty()
+            )
+        }
+    }
+}
+
+@Composable
+private fun PasswordRequirementRow(
+    requirement: PasswordRequirement,
+    passwordHasInput: Boolean
+) {
+    val rowColor = when {
+        !passwordHasInput -> MaterialTheme.colorScheme.onSurfaceVariant
+        requirement.isMet -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.error
+    }
+    val marker = if (requirement.isMet) "OK" else "-"
+
+    Text(
+        text = "$marker ${requirement.label}",
+        style = MaterialTheme.typography.bodySmall,
+        color = rowColor
+    )
+}
+
+private data class PasswordRequirement(
+    val label: String,
+    val isMet: Boolean
+)
 
 @Composable
 private fun AppScreen(
@@ -727,62 +756,24 @@ private fun LocationMessagesScreen(
                 val canReadMessage = viewModel.canReadMessage(message)
                 val canVoteOnMessage = viewModel.canVoteOnMessage(message)
                 val canDeleteFromMap = viewModel.canDeleteMessageFromMap(message)
-                val accent = rememberMessageAccent(message.displayedPoints)
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            if (popupMessageId == message.id) {
-                                popupMessageId = null
-                            }
-                        },
-                    border = accent.border,
-                    colors = CardDefaults.cardColors(
-                        containerColor = accent.containerColor
-                    )
-                ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        MessageAuthorBadge(authorDisplayName = viewModel.displayAuthorUsername(message))
-                        MessagePointsText(points = message.displayedPoints)
-                        if (!canReadMessage) {
-                            Text(
-                                text = "Move within 150m of this pin to read and rate it.",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        } else {
-                            Text(viewModel.displayMessageText(message), style = MaterialTheme.typography.bodyLarge)
+                MessageCard(
+                    message = message,
+                    authorDisplayName = viewModel.displayAuthorUsername(message),
+                    visibleText = viewModel.displayMessageText(message),
+                    canRead = canReadMessage,
+                    canVote = !isGuest && canVoteOnMessage,
+                    canDelete = !isGuest && canDeleteFromMap,
+                    showDeleteButton = isAdmin,
+                    onUpvote = { viewModel.upvoteMessage(message) },
+                    onDownvote = { viewModel.downvoteMessage(message) },
+                    onDelete = { viewModel.deleteMessage(message) },
+                    footerText = "Tap card to close",
+                    modifier = Modifier.clickable {
+                        if (popupMessageId == message.id) {
+                            popupMessageId = null
                         }
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(
-                                onClick = { viewModel.upvoteMessage(message) },
-                                enabled = !isGuest && canVoteOnMessage
-                            ) {
-                                Text("Upvote")
-                            }
-                            Button(
-                                onClick = { viewModel.downvoteMessage(message) },
-                                enabled = !isGuest && canVoteOnMessage
-                            ) {
-                                Text("Downvote")
-                            }
-                        }
-                        if (isAdmin) {
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                                TextButton(
-                                    onClick = { viewModel.deleteMessage(message) },
-                                    enabled = !isGuest && canDeleteFromMap
-                                ) {
-                                    Text("Delete")
-                                }
-                            }
-                        }
-                        Text("Tap card to close", style = MaterialTheme.typography.bodySmall)
                     }
-                }
+                )
             }
 
             Card(modifier = Modifier.fillMaxWidth()) {
@@ -914,50 +905,87 @@ private fun MyMessagesScreen(
             items(myMessages, key = { it.id }) { message ->
                 val canReadMessage = viewModel.canReadOwnMessage(message)
                 val canVoteOnMessage = viewModel.canVoteOnMessage(message)
-                val accent = rememberMessageAccent(message.displayedPoints)
-                Card(
+                MessageCard(
+                    message = message,
+                    authorDisplayName = viewModel.displayAuthorUsername(message),
+                    visibleText = viewModel.displayMyMessageText(message),
+                    canRead = canReadMessage,
+                    canVote = !isGuest && canVoteOnMessage,
+                    canDelete = !isGuest,
+                    onUpvote = { viewModel.upvoteMessage(message) },
+                    onDownvote = { viewModel.downvoteMessage(message) },
+                    onDelete = { viewModel.deleteMessage(message) }
+                )
+            }
+        }
+    }
+}
+
+// Shared card for map messages and "My Messages".
+@Composable
+private fun MessageCard(
+    message: LocationMessage,
+    authorDisplayName: String,
+    visibleText: String,
+    canRead: Boolean,
+    canVote: Boolean,
+    canDelete: Boolean,
+    onUpvote: () -> Unit,
+    onDownvote: () -> Unit,
+    onDelete: () -> Unit,
+    showDeleteButton: Boolean = canDelete,
+    modifier: Modifier = Modifier,
+    footerText: String? = null
+) {
+    val accent = rememberMessageAccent(message.displayedPoints)
+
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        border = accent.border,
+        colors = CardDefaults.cardColors(containerColor = accent.containerColor)
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            MessageAuthorBadge(authorDisplayName = authorDisplayName)
+            MessagePointsText(points = message.displayedPoints)
+
+            if (canRead) {
+                Text(visibleText, style = MaterialTheme.typography.bodyLarge)
+            } else {
+                Text(
+                    text = "Move within 150m of this pin to read and rate it.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onUpvote, enabled = canVote) {
+                    Text("Upvote")
+                }
+                Button(onClick = onDownvote, enabled = canVote) {
+                    Text("Downvote")
+                }
+            }
+
+            if (showDeleteButton) {
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    border = accent.border,
-                    colors = CardDefaults.cardColors(
-                        containerColor = accent.containerColor
-                    )
+                    horizontalArrangement = Arrangement.End
                 ) {
-                    Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        MessageAuthorBadge(authorDisplayName = viewModel.displayAuthorUsername(message))
-                        MessagePointsText(points = message.displayedPoints)
-                        if (!canReadMessage) {
-                            Text(
-                                text = "Move within 150m of this pin to read and rate it.",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        } else {
-                            Text(viewModel.displayMyMessageText(message), style = MaterialTheme.typography.bodyLarge)
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(
-                                onClick = { viewModel.upvoteMessage(message) },
-                                enabled = !isGuest && canVoteOnMessage
-                            ) {
-                                Text("Upvote")
-                            }
-                            Button(
-                                onClick = { viewModel.downvoteMessage(message) },
-                                enabled = !isGuest && canVoteOnMessage
-                            ) {
-                                Text("Downvote")
-                            }
-                        }
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                            TextButton(
-                                onClick = { viewModel.deleteMessage(message) },
-                                enabled = !isGuest
-                            ) {
-                                Text("Delete")
-                            }
-                        }
+                    TextButton(
+                        onClick = onDelete,
+                        enabled = canDelete
+                    ) {
+                        Text("Delete")
                     }
                 }
+            }
+
+            footerText?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall)
             }
         }
     }

@@ -113,8 +113,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _syncError.value = "Firebase is not configured. Add app/google-services.json."
             _authStateResolved.value = true
         } else {
-            // Bootstrap from persisted Firebase session so "guest vs user" permissions are correct
-            // even after app restarts.
+            // Restore the saved Firebase session on app startup.
             restoreExistingSession(repo)
             startObservingMessages()
             viewModelScope.launch {
@@ -125,9 +124,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /**
-     * Signs in anonymously (guest). Call from the login screen before entering the main app.
-     */
+    // Signs in anonymously for guest mode.
     fun signInAsGuest(onFinished: (Boolean) -> Unit) {
         val repo = repository
         if (repo == null) {
@@ -142,22 +139,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _syncError.value = null
             runCatching { repo.ensureSignedIn() }
                 .onSuccess { uid ->
-                    _isSignedIn.value = true
-                    _isGuest.value = repo.isGuestUser()
-                    _isAdmin.value = resolveIsAdmin(repo)
-                    _currentUserId.value = uid
-                    _syncError.value = null
-                    _currentUsername.value = ""
+                    applyAuthenticatedSession(
+                        uid = uid,
+                        isGuest = repo.isGuestUser(),
+                        isAdmin = resolveIsAdmin(repo),
+                        username = ""
+                    )
                     startObservingMessages()
                     onFinished(true)
                 }
                 .onFailure {
-                    _isSignedIn.value = false
-                    _isGuest.value = false
-                    _isAdmin.value = false
-                    _currentUserId.value = null
-                    _currentUsername.value = ""
-                    _syncError.value = it.message ?: "Authentication failed."
+                    clearAuthenticatedSession(it.message ?: "Authentication failed.")
                     onFinished(false)
                 }
         }
@@ -179,22 +171,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _syncError.value = null
             repo.registerWithEmailPassword(email, password, username)
                 .onSuccess { uid ->
-                    _isSignedIn.value = true
-                    _isGuest.value = false
-                    _isAdmin.value = resolveIsAdmin(repo)
-                    _currentUserId.value = uid
-                    _currentUsername.value = repo.refreshCurrentUsername().orEmpty()
-                    _syncError.value = null
+                    applyAuthenticatedSession(
+                        uid = uid,
+                        isGuest = false,
+                        isAdmin = resolveIsAdmin(repo),
+                        username = repo.refreshCurrentUsername().orEmpty()
+                    )
                     startObservingMessages()
                     onFinished(true)
                 }
                 .onFailure { e ->
-                    _isSignedIn.value = false
-                    _isGuest.value = false
-                    _isAdmin.value = false
-                    _currentUserId.value = null
-                    _currentUsername.value = ""
-                    _syncError.value = e.message ?: "Could not create account."
+                    clearAuthenticatedSession(e.message ?: "Could not create account.")
                     onFinished(false)
                 }
         }
@@ -211,23 +198,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _syncError.value = null
             repo.signInWithEmailPassword(email, password)
                 .onSuccess { uid ->
-                    _isSignedIn.value = true
-                    _isGuest.value = false
-                    _isAdmin.value = resolveIsAdmin(repo)
-                    _currentUserId.value = uid
-                    _currentUsername.value = repo.refreshCurrentUsername().orEmpty()
-                    _syncError.value = null
+                    applyAuthenticatedSession(
+                        uid = uid,
+                        isGuest = false,
+                        isAdmin = resolveIsAdmin(repo),
+                        username = repo.refreshCurrentUsername().orEmpty()
+                    )
                     startObservingMessages()
 
                     onFinished(true)
                 }
                 .onFailure { e ->
-                    _isSignedIn.value = false
-                    _isGuest.value = false
-                    _isAdmin.value = false
-                    _currentUserId.value = null
-                    _currentUsername.value = ""
-                    _syncError.value = e.message ?: "Could not sign in."
+                    clearAuthenticatedSession(e.message ?: "Could not sign in.")
                     onFinished(false)
                 }
         }
@@ -267,9 +249,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         clearReadMessageIds()
     }
 
-    /**
-     * Marks a message as read locally after the user taps its map pin while within [NEARBY_RADIUS_METERS].
-     */
+    // Marks a nearby message as read after the user taps it.
     fun markMessageReadIfNearby(message: LocationMessage) {
         if (!canReadMessage(message)) return
         val id = message.id.ifBlank { return }
@@ -440,6 +420,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _isAdmin.value = resolveIsAdmin(repo)
         _currentUserId.value = existingUid
         _authStateResolved.value = true
+    }
+
+    private fun applyAuthenticatedSession(
+        uid: String,
+        isGuest: Boolean,
+        isAdmin: Boolean,
+        username: String
+    ) {
+        _isSignedIn.value = true
+        _isGuest.value = isGuest
+        _isAdmin.value = isAdmin
+        _currentUserId.value = uid
+        _currentUsername.value = username
+        _syncError.value = null
+    }
+
+    private fun clearAuthenticatedSession(errorMessage: String) {
+        _isSignedIn.value = false
+        _isGuest.value = false
+        _isAdmin.value = false
+        _currentUserId.value = null
+        _currentUsername.value = ""
+        _syncError.value = errorMessage
     }
 
     private fun startObservingMessages() {
