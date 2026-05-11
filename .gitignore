@@ -1,5 +1,6 @@
 .gradle/
 .idea/
+.vscode/
 build/
 app/build/
 local.properties
@@ -8,3 +9,5 @@ app/google-services.json
 captures/
 externalNativeBuild/
 .cxx/
+*_backup/
+hs_err_pid*.log
