@@ -29,6 +29,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -75,6 +76,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
@@ -100,6 +102,13 @@ import com.google.maps.android.compose.rememberCameraPositionState
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+private const val PANEL_CONTAINER_ALPHA = 0.94f
+private const val HEADER_CONTAINER_ALPHA = 0.97f
+private const val MESSAGE_CARD_BASE_ALPHA = 0.88f
+
+private val AppPanelShape = RoundedCornerShape(20.dp)
+private val ControlShape = RoundedCornerShape(12.dp)
 
 private data class MessageMapMarkerIcons(
     val unread: BitmapDescriptor,
@@ -202,7 +211,7 @@ private fun StatusBarBackdrop(modifier: Modifier = Modifier) {
         modifier = modifier
             .fillMaxWidth()
             .height(WindowInsets.statusBars.asPaddingValues().calculateTopPadding()),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.97f),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = HEADER_CONTAINER_ALPHA),
         shadowElevation = 4.dp
     ) {}
 }
@@ -261,6 +270,69 @@ private fun LoadingScreen() {
     }
 }
 
+// Shared elevated surface used by non-map panels for a consistent app shell.
+@Composable
+private fun AppPanel(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = AppPanelShape,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = PANEL_CONTAINER_ALPHA)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            content = content
+        )
+    }
+}
+
+// Default profile mark reused in headers and account surfaces.
+@Composable
+private fun QuillAvatar(
+    size: Dp,
+    iconSize: Dp,
+    cornerRadius: Dp,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.size(size),
+        shape = RoundedCornerShape(cornerRadius),
+        color = MaterialTheme.colorScheme.primaryContainer
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Image(
+                painter = painterResource(id = R.drawable.ic_profile_quill),
+                contentDescription = null,
+                modifier = Modifier.size(iconSize)
+            )
+        }
+    }
+}
+
+@Composable
+private fun ScreenHeader(
+    title: String,
+    onBack: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(title, style = MaterialTheme.typography.headlineSmall)
+        TextButton(onClick = onBack) {
+            Text("Back")
+        }
+    }
+}
+
+// Authentication landing page plus login, registration, and password reset forms.
 @Composable
 private fun LoginScreen(
     viewModel: MainViewModel,
@@ -274,12 +346,16 @@ private fun LoginScreen(
     var confirmPassword by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
 
-    BackHandler(enabled = authDestination != AuthDestination.HOME) {
+    fun navigateBackInAuth() {
         when (authDestination) {
             AuthDestination.FORGOT_PASSWORD -> authDestination = AuthDestination.LOGIN
             else -> authDestination = AuthDestination.HOME
         }
         viewModel.clearSyncError()
+    }
+
+    BackHandler(enabled = authDestination != AuthDestination.HOME) {
+        navigateBackInAuth()
     }
 
     Column(
@@ -292,240 +368,239 @@ private fun LoginScreen(
     ) {
         if (authDestination != AuthDestination.HOME) {
             AuthBackButton(
-                onClick = {
-                    when (authDestination) {
-                        AuthDestination.FORGOT_PASSWORD -> authDestination = AuthDestination.LOGIN
-                        else -> authDestination = AuthDestination.HOME
-                    }
-                    viewModel.clearSyncError()
-                },
+                onClick = ::navigateBackInAuth,
                 enabled = !isBusy,
                 modifier = Modifier.align(Alignment.Start)
             )
         } else {
             Spacer(modifier = Modifier.height(48.dp))
         }
-        AuthHeader()
-        Spacer(modifier = Modifier.height(24.dp))
 
-        when (authDestination) {
-            AuthDestination.HOME -> {
-                Button(
-                    onClick = {
-                        viewModel.clearSyncError()
-                        authDestination = AuthDestination.REGISTER
-                    },
-                    enabled = !isBusy,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Register")
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-                Button(
-                    onClick = {
-                        viewModel.clearSyncError()
-                        authDestination = AuthDestination.LOGIN
-                    },
-                    enabled = !isBusy,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Log in")
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-                Button(
-                    onClick = {
-                        if (isBusy) return@Button
-                        isBusy = true
-                        viewModel.signInAsGuest { ok ->
-                            isBusy = false
-                            if (ok) onAuthenticated()
-                        }
-                    },
-                    enabled = !isBusy,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(if (isBusy) "Please wait..." else "Guest login")
-                }
-            }
+        AppPanel {
+            AuthHeader()
+            Spacer(modifier = Modifier.height(8.dp))
 
-            AuthDestination.LOGIN -> {
-                OutlinedTextField(
-                    value = email,
-                    onValueChange = {
-                        email = it
-                        viewModel.clearSyncError()
-                    },
-                    label = { Text("Email") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                OutlinedTextField(
-                    value = password,
-                    onValueChange = {
-                        password = it
-                        viewModel.clearSyncError()
-                    },
-                    label = { Text("Password") },
-                    singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                TextButton(
-                    onClick = { authDestination = AuthDestination.FORGOT_PASSWORD },
-                    modifier = Modifier.align(Alignment.End)
-                ) {
-                    Text("Forgot Password?")
-                }
-                Spacer(modifier = Modifier.height(20.dp))
-                Button(
-                    onClick = {
-                        if (isBusy) return@Button
-                        isBusy = true
-                        viewModel.signInWithEmailPassword(email, password) { ok ->
-                            isBusy = false
-                            if (ok) onAuthenticated()
-                        }
-                    },
-                    enabled = !isBusy && email.isNotBlank() && password.isNotBlank(),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(if (isBusy) "Please wait..." else "Log in")
-                }
-            }
-
-            AuthDestination.REGISTER -> {
-                val passwordsMatch = confirmPassword == password
-                val passwordValid = isPasswordValid(password)
-
-                OutlinedTextField(
-                    value = username,
-                    onValueChange = {
-                        username = it
-                        viewModel.clearSyncError()
-                    },
-                    label = { Text("Username") },
-                    supportingText = {
-                        Text(
-                            text = "Shown publicly on the map.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                OutlinedTextField(
-                    value = email,
-                    onValueChange = {
-                        email = it
-                        viewModel.clearSyncError()
-                    },
-                    label = { Text("Email") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                OutlinedTextField(
-                    value = password,
-                    onValueChange = {
-                        password = it
-                        viewModel.clearSyncError()
-                    },
-                    label = { Text("Password") },
-                    singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                OutlinedTextField(
-                    value = confirmPassword,
-                    onValueChange = {
-                        confirmPassword = it
-                        viewModel.clearSyncError()
-                    },
-                    label = { Text("Confirm password") },
-                    singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                PasswordRequirements(password = password)
-                if (confirmPassword.isNotEmpty() && !passwordsMatch) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Passwords do not match.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.align(Alignment.Start)
-                    )
-                }
-                Spacer(modifier = Modifier.height(20.dp))
-                Button(
-                    onClick = {
-                        if (isBusy || !passwordValid || !passwordsMatch) return@Button
-                        isBusy = true
-                        viewModel.registerWithEmailPassword(email, password, username) { ok ->
-                            isBusy = false
-                            if (ok) onAuthenticated()
-                        }
-                    },
-                    enabled = !isBusy && username.trim().length >= AUTH_USERNAME_PREVIEW_MIN_LENGTH &&
-                        email.isNotBlank() && password.isNotBlank() &&
-                        confirmPassword.isNotBlank() && passwordValid && passwordsMatch,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(if (isBusy) "Please wait..." else "Create account")
-                }
-            }
-
-            AuthDestination.FORGOT_PASSWORD -> {
-                OutlinedTextField(
-                    value = email,
-                    onValueChange = {
-                        email = it
-                        viewModel.clearSyncError()
-                    },
-                    label = { Text("Email") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(20.dp))
-                Button(
-                    onClick = {
-                        if (isBusy) return@Button
-                        isBusy = true
-                        viewModel.sendPasswordResetEmail(email) { success ->
-                            isBusy = false
-                            if (success) {
-                                authDestination = AuthDestination.LOGIN
-                                email = ""
+            when (authDestination) {
+                AuthDestination.HOME -> {
+                    Button(
+                        onClick = {
+                            viewModel.clearSyncError()
+                            authDestination = AuthDestination.REGISTER
+                        },
+                        enabled = !isBusy,
+                        shape = ControlShape,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Register")
+                    }
+                    Button(
+                        onClick = {
+                            viewModel.clearSyncError()
+                            authDestination = AuthDestination.LOGIN
+                        },
+                        enabled = !isBusy,
+                        shape = ControlShape,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Log in")
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            if (isBusy) return@OutlinedButton
+                            isBusy = true
+                            viewModel.signInAsGuest { ok ->
+                                isBusy = false
+                                if (ok) onAuthenticated()
                             }
-                        }
-                    },
-                    enabled = !isBusy && email.isNotBlank(),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(if (isBusy) "Sending..." else "Send Password Reset Email")
+                        },
+                        enabled = !isBusy,
+                        shape = ControlShape,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (isBusy) "Please wait..." else "Guest login")
+                    }
                 }
+
+                AuthDestination.LOGIN -> {
+                    OutlinedTextField(
+                        value = email,
+                        onValueChange = {
+                            email = it
+                            viewModel.clearSyncError()
+                        },
+                        label = { Text("Email") },
+                        singleLine = true,
+                        shape = ControlShape,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = {
+                            password = it
+                            viewModel.clearSyncError()
+                        },
+                        label = { Text("Password") },
+                        singleLine = true,
+                        shape = ControlShape,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    TextButton(
+                        onClick = { authDestination = AuthDestination.FORGOT_PASSWORD },
+                        modifier = Modifier.align(Alignment.End)
+                    ) {
+                        Text("Forgot Password?")
+                    }
+                    Button(
+                        onClick = {
+                            if (isBusy) return@Button
+                            isBusy = true
+                            viewModel.signInWithEmailPassword(email, password) { ok ->
+                                isBusy = false
+                                if (ok) onAuthenticated()
+                            }
+                        },
+                        enabled = !isBusy && email.isNotBlank() && password.isNotBlank(),
+                        shape = ControlShape,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (isBusy) "Please wait..." else "Log in")
+                    }
+                }
+
+                AuthDestination.REGISTER -> {
+                    val passwordsMatch = confirmPassword == password
+                    val passwordValid = isPasswordValid(password)
+
+                    OutlinedTextField(
+                        value = username,
+                        onValueChange = {
+                            username = it
+                            viewModel.clearSyncError()
+                        },
+                        label = { Text("Username") },
+                        supportingText = {
+                            Text(
+                                text = "Shown publicly on the map.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        },
+                        singleLine = true,
+                        shape = ControlShape,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = email,
+                        onValueChange = {
+                            email = it
+                            viewModel.clearSyncError()
+                        },
+                        label = { Text("Email") },
+                        singleLine = true,
+                        shape = ControlShape,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = {
+                            password = it
+                            viewModel.clearSyncError()
+                        },
+                        label = { Text("Password") },
+                        singleLine = true,
+                        shape = ControlShape,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = confirmPassword,
+                        onValueChange = {
+                            confirmPassword = it
+                            viewModel.clearSyncError()
+                        },
+                        label = { Text("Confirm password") },
+                        singleLine = true,
+                        shape = ControlShape,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    PasswordRequirements(password = password)
+                    if (confirmPassword.isNotEmpty() && !passwordsMatch) {
+                        Text(
+                            text = "Passwords do not match.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.align(Alignment.Start)
+                        )
+                    }
+                    Button(
+                        onClick = {
+                            if (isBusy || !passwordValid || !passwordsMatch) return@Button
+                            isBusy = true
+                            viewModel.registerWithEmailPassword(email, password, username) { ok ->
+                                isBusy = false
+                                if (ok) onAuthenticated()
+                            }
+                        },
+                        enabled = !isBusy && username.trim().length >= AUTH_USERNAME_PREVIEW_MIN_LENGTH &&
+                            email.isNotBlank() && password.isNotBlank() &&
+                            confirmPassword.isNotBlank() && passwordValid && passwordsMatch,
+                        shape = ControlShape,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (isBusy) "Please wait..." else "Create account")
+                    }
+                }
+
+                AuthDestination.FORGOT_PASSWORD -> {
+                    OutlinedTextField(
+                        value = email,
+                        onValueChange = {
+                            email = it
+                            viewModel.clearSyncError()
+                        },
+                        label = { Text("Email") },
+                        singleLine = true,
+                        shape = ControlShape,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Button(
+                        onClick = {
+                            if (isBusy) return@Button
+                            isBusy = true
+                            viewModel.sendPasswordResetEmail(email) { success ->
+                                isBusy = false
+                                if (success) {
+                                    authDestination = AuthDestination.LOGIN
+                                    email = ""
+                                }
+                            }
+                        },
+                        enabled = !isBusy && email.isNotBlank(),
+                        shape = ControlShape,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (isBusy) "Sending..." else "Send Password Reset Email")
+                    }
+                }
+            }
+
+            if (!syncError.isNullOrBlank()) {
+                Text(
+                    text = syncError.orEmpty(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
             }
         }
 
-        if (!syncError.isNullOrBlank()) {
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = syncError.orEmpty(),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error
-            )
-        }
         Spacer(modifier = Modifier.weight(1f))
         Text(
             text = "By signing up and logging in, I acknowledge that this an application that is still in development.",
@@ -542,14 +617,23 @@ private fun LoginScreen(
 // Header used on the login and registration screens.
 @Composable
 private fun AuthHeader() {
-    Spacer(modifier = Modifier.height(24.dp))
+    Box(
+        modifier = Modifier.fillMaxWidth(),
+        contentAlignment = Alignment.Center
+    ) {
+        QuillAvatar(size = 64.dp, iconSize = 38.dp, cornerRadius = 20.dp)
+    }
     Text(
         text = "Message In a Bottle",
-        style = MaterialTheme.typography.headlineMedium
+        modifier = Modifier.fillMaxWidth(),
+        textAlign = TextAlign.Center,
+        style = MaterialTheme.typography.headlineMedium,
+        fontWeight = FontWeight.Bold
     )
-    Spacer(modifier = Modifier.height(8.dp))
     Text(
         text = "Please continue to register, login, or guest login below.",
+        modifier = Modifier.fillMaxWidth(),
+        textAlign = TextAlign.Center,
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
@@ -647,6 +731,7 @@ private fun AppScreen(
 ) {
     var destination by remember { mutableStateOf(AppDestination.MAIN) }
 
+    // Simple in-memory navigation for the authenticated part of the app.
     when (destination) {
         AppDestination.MAIN -> {
             LocationMessagesScreen(
@@ -686,6 +771,7 @@ private fun AppScreen(
     }
 }
 
+// Main map experience: location permissions, map markers, header, and composer.
 @Composable
 private fun LocationMessagesScreen(
     viewModel: MainViewModel = viewModel(),
@@ -815,9 +901,9 @@ private fun LocationMessagesScreen(
 
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
+                shape = AppPanelShape,
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)
+                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = PANEL_CONTAINER_ALPHA)
                 ),
                 elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
             ) {
@@ -893,6 +979,7 @@ private fun LocationMessagesScreen(
     }
 }
 
+// Floating map header with profile navigation and quick actions.
 @Composable
 private fun MapHeaderBlock(
     isGuest: Boolean,
@@ -917,8 +1004,8 @@ private fun MapHeaderBlock(
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.97f),
+        shape = AppPanelShape,
+        color = MaterialTheme.colorScheme.surface.copy(alpha = HEADER_CONTAINER_ALPHA),
         tonalElevation = 8.dp,
         shadowElevation = 12.dp
     ) {
@@ -940,19 +1027,7 @@ private fun MapHeaderBlock(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Surface(
-                        modifier = Modifier.size(44.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Image(
-                                painter = painterResource(id = R.drawable.ic_profile_quill),
-                                contentDescription = null,
-                                modifier = Modifier.size(28.dp)
-                            )
-                        }
-                    }
+                    QuillAvatar(size = 44.dp, iconSize = 28.dp, cornerRadius = 14.dp)
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = displayName,
@@ -1010,6 +1085,7 @@ private fun MapHeaderBlock(
     }
 }
 
+// Read-only account details assembled from current ViewModel state.
 @Composable
 private fun AccountScreen(
     viewModel: MainViewModel = viewModel(),
@@ -1042,71 +1118,38 @@ private fun AccountScreen(
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("Account", style = MaterialTheme.typography.headlineSmall)
-            TextButton(onClick = onBack) {
-                Text("Back")
-            }
-        }
+        ScreenHeader(title = "Account", onBack = onBack)
 
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)
-            ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+        AppPanel {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Surface(
-                        modifier = Modifier.size(56.dp),
-                        shape = RoundedCornerShape(18.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Image(
-                                painter = painterResource(id = R.drawable.ic_profile_quill),
-                                contentDescription = null,
-                                modifier = Modifier.size(34.dp)
-                            )
-                        }
-                    }
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = displayName,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = accountType,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                QuillAvatar(size = 56.dp, iconSize = 34.dp, cornerRadius = 18.dp)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = displayName,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = accountType,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
-
-                AccountInfoRow(label = "Username", value = displayName)
-                AccountInfoRow(
-                    label = "Email",
-                    value = if (isGuest) "Guest accounts do not have an email." else email.ifBlank { "Unavailable" }
-                )
-                AccountInfoRow(label = "Messages posted", value = myMessages.size.toString())
-                AccountInfoRow(label = "Permissions", value = if (isAdmin) "Admin controls enabled" else "Standard access")
-                AccountInfoRow(label = "User ID", value = userId.orEmpty().ifBlank { "Not available" })
             }
+
+            AccountInfoRow(label = "Username", value = displayName)
+            AccountInfoRow(
+                label = "Email",
+                value = if (isGuest) "Guest accounts do not have an email." else email.ifBlank { "Unavailable" }
+            )
+            AccountInfoRow(label = "Messages posted", value = myMessages.size.toString())
+            AccountInfoRow(label = "Permissions", value = if (isAdmin) "Admin controls enabled" else "Standard access")
+            AccountInfoRow(label = "User ID", value = userId.orEmpty().ifBlank { "Not available" })
         }
     }
 }
@@ -1131,6 +1174,7 @@ private fun AccountInfoRow(
     }
 }
 
+// User-authored messages list with local sorting controls.
 @Composable
 private fun MyMessagesScreen(
     viewModel: MainViewModel = viewModel(),
@@ -1149,35 +1193,35 @@ private fun MyMessagesScreen(
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text("Messages", style = MaterialTheme.typography.headlineSmall)
-            TextButton(onClick = onBack) {
-                Text("Back")
-            }
-        }
+        ScreenHeader(title = "Messages", onBack = onBack)
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        AppPanel {
             Text(
                 text = "Sort by",
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            MyMessagesSortOrder.entries.forEach { sortOrder ->
-                val isSelected = sortOrder == myMessagesSortOrder
-                if (isSelected) {
-                    Button(onClick = { viewModel.setMyMessagesSortOrder(sortOrder) }) {
-                        Text(sortOrder.label)
-                    }
-                } else {
-                    OutlinedButton(onClick = { viewModel.setMyMessagesSortOrder(sortOrder) }) {
-                        Text(sortOrder.label)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                MyMessagesSortOrder.entries.forEach { sortOrder ->
+                    val isSelected = sortOrder == myMessagesSortOrder
+                    if (isSelected) {
+                        Button(
+                            onClick = { viewModel.setMyMessagesSortOrder(sortOrder) },
+                            shape = ControlShape
+                        ) {
+                            Text(sortOrder.label)
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = { viewModel.setMyMessagesSortOrder(sortOrder) },
+                            shape = ControlShape
+                        ) {
+                            Text(sortOrder.label)
+                        }
                     }
                 }
             }
@@ -1203,7 +1247,7 @@ private fun MyMessagesScreen(
     }
 }
 
-// Shared card for map messages and "Messages".
+// Shared card for map popups and the Messages screen.
 @Composable
 private fun MessageCard(
     message: LocationMessage,
@@ -1231,7 +1275,7 @@ private fun MessageCard(
 
     Card(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        shape = AppPanelShape,
         border = accent.border,
         colors = CardDefaults.cardColors(containerColor = accent.containerColor),
         elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
@@ -1388,7 +1432,7 @@ private fun rememberMessageAccent(points: Long): MessageAccent {
     }
 
     return remember(points, colorScheme.surface, glowColor) {
-        val baseContainer = colorScheme.surface.copy(alpha = 0.94f)
+        val baseContainer = colorScheme.surface.copy(alpha = MESSAGE_CARD_BASE_ALPHA)
         if (glowColor == null) {
             MessageAccent(
                 glowColor = null,
@@ -1422,6 +1466,7 @@ private fun rememberMessageAccent(points: Long): MessageAccent {
     }
 }
 
+// Pre-renders marker drawables at the sizes and states needed by the map.
 @Composable
 private fun rememberMessageMapMarkerIcons(): MessageMapMarkerIcons {
     val context = LocalContext.current
@@ -1464,6 +1509,7 @@ private fun rememberMessageMapMarkerIcons(): MessageMapMarkerIcons {
     }
 }
 
+// Account and content preferences.
 @Composable
 private fun SettingsScreen(
     darkThemeEnabled: Boolean,
@@ -1485,33 +1531,19 @@ private fun SettingsScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(text = "Settings", style = MaterialTheme.typography.headlineSmall)
-            TextButton(onClick = onBack) {
-                Text("Back")
-            }
-        }
+        ScreenHeader(title = "Settings", onBack = onBack)
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text("Dark theme", style = MaterialTheme.typography.bodyLarge)
-            Switch(
+        AppPanel {
+            SettingsToggleRow(
+                title = "Dark theme",
+                supportingText = "Use a darker color palette throughout the app.",
                 checked = darkThemeEnabled,
                 onCheckedChange = onThemeChanged
             )
-        }
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text("Profanity filter", style = MaterialTheme.typography.bodyLarge)
-            Switch(
+            SettingsToggleRow(
+                title = "Profanity filter",
+                supportingText = "Hide offensive language in messages when possible.",
                 checked = profanityFilterEnabled,
                 onCheckedChange = { enabled ->
                     if (enabled) {
@@ -1523,14 +1555,14 @@ private fun SettingsScreen(
                     }
                 }
             )
-        }
 
-        Spacer(modifier = Modifier.height(8.dp))
-        Button(
-            onClick = onLogout,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Log out")
+            Button(
+                onClick = onLogout,
+                shape = ControlShape,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Log out")
+            }
         }
     }
 
@@ -1561,6 +1593,34 @@ private fun SettingsScreen(
     }
 }
 
+@Composable
+private fun SettingsToggleRow(
+    title: String,
+    supportingText: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+            Text(
+                text = supportingText,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange
+        )
+    }
+}
+
+// Locked-down map configuration; only zoom gestures are enabled.
 @Composable
 private fun MapSection(
     modifier: Modifier = Modifier,
