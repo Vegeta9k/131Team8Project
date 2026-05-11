@@ -5,6 +5,9 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
+import android.graphics.Paint
 import android.content.pm.PackageManager
 import android.location.Location
 import android.os.Build
@@ -89,13 +92,19 @@ private data class MessageMapMarkerIcons(
     val unread: BitmapDescriptor,
     val read: BitmapDescriptor,
     val unreadHighlighted: BitmapDescriptor,
-    val readHighlighted: BitmapDescriptor
+    val readHighlighted: BitmapDescriptor,
+    val unreadOutOfRange: BitmapDescriptor,
+    val readOutOfRange: BitmapDescriptor,
+    val unreadOutOfRangeHighlighted: BitmapDescriptor,
+    val readOutOfRangeHighlighted: BitmapDescriptor
 )
 
 private fun bitmapDescriptorFromDrawable(
     context: Context,
     @DrawableRes resId: Int,
-    targetWidthDp: Float = 44f
+    targetWidthDp: Float = 44f,
+    alpha: Float = 1f,
+    saturation: Float = 1f
 ): BitmapDescriptor {
     val drawable = ContextCompat.getDrawable(context, resId)!!
     val density = context.resources.displayMetrics.density
@@ -105,10 +114,26 @@ private fun bitmapDescriptorFromDrawable(
     val aspect = srcH.toFloat() / srcW.toFloat().coerceAtLeast(0.01f)
     val w = targetPx
     val h = (targetPx * aspect).toInt().coerceAtLeast(1).coerceAtMost(512)
-    val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(bitmap)
-    drawable.setBounds(0, 0, canvas.width, canvas.height)
-    drawable.draw(canvas)
+    val sourceBitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+    val sourceCanvas = Canvas(sourceBitmap)
+    drawable.setBounds(0, 0, sourceCanvas.width, sourceCanvas.height)
+    drawable.draw(sourceCanvas)
+    val bitmap = if (alpha < 1f || saturation < 1f) {
+        val adjustedBitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val adjustedCanvas = Canvas(adjustedBitmap)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+            this.alpha = (alpha.coerceIn(0f, 1f) * 255).toInt()
+            if (saturation < 1f) {
+                colorFilter = ColorMatrixColorFilter(
+                    ColorMatrix().apply { setSaturation(saturation.coerceIn(0f, 1f)) }
+                )
+            }
+        }
+        adjustedCanvas.drawBitmap(sourceBitmap, 0f, 0f, paint)
+        adjustedBitmap
+    } else {
+        sourceBitmap
+    }
     return BitmapDescriptorFactory.fromBitmap(bitmap)
 }
 
@@ -1001,9 +1026,9 @@ private data class MessageAccent(
 private fun rememberMessageAccent(points: Long): MessageAccent {
     val colorScheme = MaterialTheme.colorScheme
     val glowColor = when {
-        points >= 100L -> Color(0xFFFF3B30)
-        points >= 50L -> Color(0xFFFF9500)
-        points >= 10L -> Color(0xFFFFD60A)
+        points >= 100L -> Color(0xFFD4AF37)
+        points >= 50L -> Color(0xFFC0C0C0)
+        points >= 10L -> Color(0xFFCD7F32)
         else -> null
     }
 
@@ -1076,7 +1101,35 @@ private fun rememberMessageMapMarkerIcons(): MessageMapMarkerIcons {
             unread = bitmapDescriptorFromDrawable(context, R.drawable.map_marker_message_unread, 44f),
             read = bitmapDescriptorFromDrawable(context, R.drawable.map_marker_message_read, 44f),
             unreadHighlighted = bitmapDescriptorFromDrawable(context, R.drawable.map_marker_message_unread, 52f),
-            readHighlighted = bitmapDescriptorFromDrawable(context, R.drawable.map_marker_message_read, 52f)
+            readHighlighted = bitmapDescriptorFromDrawable(context, R.drawable.map_marker_message_read, 52f),
+            unreadOutOfRange = bitmapDescriptorFromDrawable(
+                context = context,
+                resId = R.drawable.map_marker_message_unread,
+                targetWidthDp = 44f,
+                alpha = 0.6f,
+                saturation = 0.2f
+            ),
+            readOutOfRange = bitmapDescriptorFromDrawable(
+                context = context,
+                resId = R.drawable.map_marker_message_read,
+                targetWidthDp = 44f,
+                alpha = 0.6f,
+                saturation = 0.2f
+            ),
+            unreadOutOfRangeHighlighted = bitmapDescriptorFromDrawable(
+                context = context,
+                resId = R.drawable.map_marker_message_unread,
+                targetWidthDp = 52f,
+                alpha = 0.8f,
+                saturation = 0.35f
+            ),
+            readOutOfRangeHighlighted = bitmapDescriptorFromDrawable(
+                context = context,
+                resId = R.drawable.map_marker_message_read,
+                targetWidthDp = 52f,
+                alpha = 0.8f,
+                saturation = 0.35f
+            )
         )
     }
 }
@@ -1219,20 +1272,18 @@ private fun MapSection(
             messages.forEach { message ->
                 val isNearby = nearbyMessageIds.contains(message.id)
                 val isHighlighted = message.id == highlightedMessageId
-                val markerTitle = if (isNearby) "Nearby" else "Message"
+                val markerTitle = if (isNearby) "Nearby" else "Out of range"
                 val authorSnippet = message.authorUsername.trim().ifBlank { "Unknown user" }
                 val hasBeenOpened = readMessageIds.contains(message.id)
-                val markerIcon = if (!isNearby) {
-                    BitmapDescriptorFactory.defaultMarker(
-                        if (isHighlighted) BitmapDescriptorFactory.HUE_AZURE else BitmapDescriptorFactory.HUE_RED
-                    )
-                } else {
-                    when {
-                        isHighlighted && hasBeenOpened -> markerIcons.readHighlighted
-                        isHighlighted -> markerIcons.unreadHighlighted
-                        hasBeenOpened -> markerIcons.read
-                        else -> markerIcons.unread
-                    }
+                val markerIcon = when {
+                    !isNearby && isHighlighted && hasBeenOpened -> markerIcons.readOutOfRangeHighlighted
+                    !isNearby && isHighlighted -> markerIcons.unreadOutOfRangeHighlighted
+                    !isNearby && hasBeenOpened -> markerIcons.readOutOfRange
+                    !isNearby -> markerIcons.unreadOutOfRange
+                    isHighlighted && hasBeenOpened -> markerIcons.readHighlighted
+                    isHighlighted -> markerIcons.unreadHighlighted
+                    hasBeenOpened -> markerIcons.read
+                    else -> markerIcons.unread
                 }
                 Marker(
                     state = MarkerState(position = LatLng(message.latitude, message.longitude)),
