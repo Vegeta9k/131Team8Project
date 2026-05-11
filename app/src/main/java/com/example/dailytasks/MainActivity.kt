@@ -1107,7 +1107,10 @@ private fun MapSection(
     GoogleMap(
         modifier = modifier,
         cameraPositionState = cameraPositionState,
-        properties = MapProperties(isMyLocationEnabled = isMyLocationEnabled),
+        properties = MapProperties(
+            isMyLocationEnabled = isMyLocationEnabled,
+            minZoomPreference = 16f
+        ),
         uiSettings = lockedUiSettings,
         onMapClick = onMapClick
     ) {
