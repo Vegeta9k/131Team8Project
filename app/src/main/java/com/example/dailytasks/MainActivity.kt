@@ -546,7 +546,7 @@ private fun LocationMessagesScreen(
 
     LaunchedEffect(userLatLng) {
         val user = userLatLng ?: return@LaunchedEffect
-        cameraPositionState.animate(CameraUpdateFactory.newLatLngZoom(user, 16f))
+        cameraPositionState.animate(CameraUpdateFactory.newLatLngZoom(user, 18f))
     }
 
     if (permissionsGranted) {
