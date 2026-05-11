@@ -9,11 +9,6 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
-import javax.mail.*
-import javax.mail.internet.*
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import java.util.Properties
 
 class MessageSyncRepository(
     private val auth: FirebaseAuth = FirebaseAuth.getInstance(),
@@ -92,15 +87,6 @@ class MessageSyncRepository(
         }.mapError(::toFriendlyAuthError)
     }
 
-    suspend fun updatePassword(newPassword: String): Result<Unit> {
-        if (newPassword.isBlank()) return Result.failure(IllegalArgumentException("Enter a password."))
-        return runCatching {
-            val user = auth.currentUser ?: error("Not signed in.")
-            user.updatePassword(newPassword).await()
-            Unit // Convert Void to Unit
-        }.mapError(::toFriendlyAuthError)
-    }
-
     suspend fun sendPasswordResetEmail(email: String): Result<Unit> {
         if (email.isBlank()) return Result.failure(IllegalArgumentException("Enter an email address."))
         return runCatching {
@@ -140,7 +126,7 @@ class MessageSyncRepository(
         )
         return runCatching {
             messagesCollection.add(payload).await()
-        }.map { Unit }
+        }.map { }
     }
 
     suspend fun deleteMessage(messageId: String, allowDeleteAny: Boolean = false): Result<Unit> {
@@ -158,7 +144,7 @@ class MessageSyncRepository(
                 error("You can delete only your own messages.")
             }
             messagesCollection.document(messageId).delete().await()
-        }.map { Unit }
+        }.map { }
     }
 
     suspend fun voteOnMessage(
@@ -219,7 +205,7 @@ class MessageSyncRepository(
                     return@runTransaction null
                 }
 
-                if (previousVote != 0L && previousVote != newVote) {
+                if (previousVote != 0L) {
                     val updatedRating = currentRating - previousVote
                     val updates = if (previousVote == 1L) {
                         mapOf(
@@ -243,17 +229,14 @@ class MessageSyncRepository(
                 }
 
                 val upvoteDelta = when {
-                    previousVote == 1L -> -1L
                     newVote == 1L -> 1L
                     else -> 0L
                 }
                 val downvoteDelta = when {
-                    previousVote == -1L -> -1L
                     newVote == -1L -> 1L
                     else -> 0L
                 }
-                val ratingDelta = newVote - previousVote
-                val updatedRating = currentRating + ratingDelta
+                val updatedRating = currentRating + newVote
 
                 if (updatedRating <= AUTO_DELETE_RATING_THRESHOLD) {
                     transaction.delete(docRef)
@@ -269,7 +252,7 @@ class MessageSyncRepository(
                     )
                 }
             }.await()
-        }.map { Unit }
+        }.map { }
     }
 
     fun observeMessages(): Flow<Result<List<LocationMessage>>> = callbackFlow {
