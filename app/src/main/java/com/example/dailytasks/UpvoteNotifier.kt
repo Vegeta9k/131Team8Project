@@ -14,6 +14,7 @@ object UpvoteNotifier {
     private const val CHANNEL_ID = "upvote_notifications"
     private var nextId = 1000
 
+    // Creates the Android notification channel once so future upvote alerts can be shown.
     fun createChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
@@ -28,6 +29,7 @@ object UpvoteNotifier {
         }
     }
 
+    // Shows a short notification preview when one of the current user's messages gains an upvote.
     fun notifyUpvote(context: Context, messagePreview: String) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)

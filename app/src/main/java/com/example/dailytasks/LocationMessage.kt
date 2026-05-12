@@ -1,5 +1,6 @@
 package com.example.dailytasks
 
+// Represents one message pin stored in Firestore and rendered on the map/list UI.
 data class LocationMessage(
     val id: String = "",
     val text: String = "",
@@ -13,6 +14,7 @@ data class LocationMessage(
     val downvotes: Long = 0L,
     val rating: Long = 0L
 ) {
+    // The UI shows rating as the message's visible score.
     val displayedPoints: Long
         get() = rating
 }

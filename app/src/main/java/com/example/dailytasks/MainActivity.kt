@@ -121,6 +121,7 @@ private data class MessageMapMarkerIcons(
     val readOutOfRangeHighlighted: BitmapDescriptor
 )
 
+// Converts drawable resources into map marker icons, with optional fading/desaturation for state changes.
 private fun bitmapDescriptorFromDrawable(
     context: Context,
     @DrawableRes resId: Int,
@@ -175,7 +176,9 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// Chooses between loading, login, and the main app.
+// Root Compose switchboard.
+// It decides whether the user sees the startup spinner, the auth flow, or the signed-in app shell
+// based on auth state exposed by MainViewModel.
 @Composable
 private fun AppRoot(viewModel: MainViewModel = viewModel()) {
     NotificationPermissionEffect()
@@ -216,6 +219,7 @@ private fun StatusBarBackdrop(modifier: Modifier = Modifier) {
     ) {}
 }
 
+// Keeps the app content behind the system bars while updating icon colors for light/dark themes.
 @Composable
 private fun VisibleSystemBarsEffect(darkThemeEnabled: Boolean) {
     val view = LocalView.current
@@ -315,6 +319,7 @@ private fun QuillAvatar(
     }
 }
 
+// Standard top row for screens that need a title and a back action.
 @Composable
 private fun ScreenHeader(
     title: String,
@@ -339,6 +344,8 @@ private fun LoginScreen(
     onAuthenticated: () -> Unit
 ) {
     val syncError by viewModel.syncError.collectAsStateWithLifecycle()
+    // Temporary form state and auth-screen routing live locally because they only matter while
+    // this composable is on screen.
     var authDestination by remember { mutableStateOf(AuthDestination.HOME) }
     var isBusy by remember { mutableStateOf(false) }
     var email by remember { mutableStateOf("") }
@@ -380,6 +387,7 @@ private fun LoginScreen(
             AuthHeader()
             Spacer(modifier = Modifier.height(8.dp))
 
+            // This screen swaps form bodies in place instead of navigating to separate destinations.
             when (authDestination) {
                 AuthDestination.HOME -> {
                     Button(
@@ -422,6 +430,7 @@ private fun LoginScreen(
                 }
 
                 AuthDestination.LOGIN -> {
+                    // Existing members authenticate here with Firebase email/password credentials.
                     OutlinedTextField(
                         value = email,
                         onValueChange = {
@@ -471,6 +480,8 @@ private fun LoginScreen(
                 }
 
                 AuthDestination.REGISTER -> {
+                    // Registration collects both auth credentials and the public username stored
+                    // alongside messages in Firestore.
                     val passwordsMatch = confirmPassword == password
                     val passwordValid = isPasswordValid(password)
 
@@ -559,6 +570,7 @@ private fun LoginScreen(
                 }
 
                 AuthDestination.FORGOT_PASSWORD -> {
+                    // Password recovery delegates the actual email delivery to Firebase Auth.
                     OutlinedTextField(
                         value = email,
                         onValueChange = {
@@ -639,6 +651,7 @@ private fun AuthHeader() {
     )
 }
 
+// Small back button used while moving between auth sub-screens.
 @Composable
 private fun AuthBackButton(
     onClick: () -> Unit,
@@ -724,6 +737,7 @@ private data class PasswordRequirement(
     val isMet: Boolean
 )
 
+// Hosts the authenticated part of the app with lightweight in-memory navigation.
 @Composable
 private fun AppScreen(
     viewModel: MainViewModel,
@@ -732,6 +746,8 @@ private fun AppScreen(
     var destination by remember { mutableStateOf(AppDestination.MAIN) }
 
     // Simple in-memory navigation for the authenticated part of the app.
+    // Since all authenticated screens share one activity and one ViewModel, switching on an enum
+    // is enough here instead of introducing a full navigation graph.
     when (destination) {
         AppDestination.MAIN -> {
             LocationMessagesScreen(
@@ -771,7 +787,9 @@ private fun AppScreen(
     }
 }
 
-// Main map experience: location permissions, map markers, header, and composer.
+// Main signed-in screen.
+// This composable pulls together live message state, location permission handling, map camera
+// behavior, marker selection, and the bottom composer used to create a new pin.
 @Composable
 private fun LocationMessagesScreen(
     viewModel: MainViewModel = viewModel(),
@@ -780,6 +798,8 @@ private fun LocationMessagesScreen(
     onOpenAccount: () -> Unit
 ) {
     val context = LocalContext.current
+    // Shared app state from the ViewModel. These values control what the map shows and what the
+    // user is currently allowed to do.
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val nearbyMessages by viewModel.nearbyMessages.collectAsStateWithLifecycle()
     val readMessageIds by viewModel.readMessageIds.collectAsStateWithLifecycle()
@@ -790,12 +810,14 @@ private fun LocationMessagesScreen(
     val isAdmin by viewModel.isAdmin.collectAsStateWithLifecycle()
     val currentUsername by viewModel.currentUsername.collectAsStateWithLifecycle()
     val syncError by viewModel.syncError.collectAsStateWithLifecycle()
+    // Purely local UI state for this screen.
     var permissionsGranted by remember { mutableStateOf(hasLocationPermission(context)) }
     val cameraPositionState = rememberCameraPositionState()
     var popupMessageId by remember { mutableStateOf<String?>(null) }
     var isWritingMessage by remember { mutableStateOf(false) }
     val popupMessage = messages.firstOrNull { it.id == popupMessageId }
 
+    // Android permission launcher for fine/coarse location.
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { grants ->
@@ -803,6 +825,8 @@ private fun LocationMessagesScreen(
             grants[Manifest.permission.ACCESS_COARSE_LOCATION] == true
     }
 
+    // Prompt once for location if it is missing so the map can center on the user and enforce
+    // nearby-only reading/writing rules.
     LaunchedEffect(Unit) {
         if (!permissionsGranted) {
             permissionLauncher.launch(
@@ -814,18 +838,23 @@ private fun LocationMessagesScreen(
         }
     }
 
+    // Recenter the camera whenever a fresh user location arrives.
+    // Right now this always animates to the latest fix, which keeps the user centered.
     LaunchedEffect(userLatLng) {
         val user = userLatLng ?: return@LaunchedEffect
         cameraPositionState.animate(CameraUpdateFactory.newLatLngZoom(user, 18f))
     }
 
+    // Only request continuous GPS updates after location access has been granted.
     if (permissionsGranted) {
         LocationUpdatesEffect(onLocationUpdate = viewModel::updateUserLocation)
     }
 
+    // Build marker artwork once and reuse it across recompositions.
     val mapMarkerIcons = rememberMessageMapMarkerIcons()
 
     Box(modifier = Modifier.fillMaxSize()) {
+        // The map is the base layer for this whole screen.
         MapSection(
             modifier = Modifier.fillMaxSize(),
             cameraPositionState = cameraPositionState,
@@ -839,16 +868,19 @@ private fun LocationMessagesScreen(
             isMyLocationEnabled = permissionsGranted,
             onMapClick = {
                 popupMessageId = null
+                // In write mode, a map tap chooses the target point for the new message.
                 if (isWritingMessage && !isGuest) {
                     viewModel.updateSelectedLocation(it)
                 }
             },
             onMarkerClick = { message ->
+                // Opening a nearby pin marks it as read so future markers/cards can reflect that.
                 popupMessageId = message.id
                 viewModel.markMessageReadIfNearby(message)
             }
         )
 
+        // Header overlay pinned to the top of the map.
         Column(
             modifier = Modifier
                 .align(Alignment.TopCenter)
@@ -867,6 +899,7 @@ private fun LocationMessagesScreen(
             )
         }
 
+        // Bottom overlay used for the selected-message popup and the write-message composer.
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -874,6 +907,8 @@ private fun LocationMessagesScreen(
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // When a marker is selected, show a compact card above the composer instead of opening
+            // a separate screen or bottom sheet.
             popupMessage?.let { message ->
                 val canReadMessage = viewModel.canReadMessage(message)
                 val canVoteOnMessage = viewModel.canVoteOnMessage(message)
@@ -892,6 +927,7 @@ private fun LocationMessagesScreen(
                     footerText = "Tap card to close",
                     compact = true,
                     modifier = Modifier.clickable {
+                        // Let the card itself dismiss the popup for a quick close gesture.
                         if (popupMessageId == message.id) {
                             popupMessageId = null
                         }
@@ -914,6 +950,7 @@ private fun LocationMessagesScreen(
                     if (!isWritingMessage) {
                         Button(
                             onClick = {
+                                // Enter compose mode and free up map taps for location selection.
                                 popupMessageId = null
                                 isWritingMessage = true
                             },
@@ -923,6 +960,9 @@ private fun LocationMessagesScreen(
                             Text("Write a message")
                         }
                     } else {
+                        // Write mode is a two-step flow:
+                        // 1. tap the map to choose a pin location
+                        // 2. enter text and save if the point is close enough
                         val canWriteSelectedMessage = viewModel.canWriteSelectedMessage()
                         Text(
                             text = if (selectedLatLng == null) {
@@ -952,6 +992,8 @@ private fun LocationMessagesScreen(
                             Button(
                                 onClick = {
                                     viewModel.saveMessage { didSave ->
+                                        // Collapse the composer only after the repository confirms
+                                        // the write succeeded.
                                         if (didSave) {
                                             isWritingMessage = false
                                         }
@@ -963,6 +1005,7 @@ private fun LocationMessagesScreen(
                             }
                             Button(
                                 onClick = {
+                                    // Cancel exits compose mode and forgets the temporary map point.
                                     viewModel.clearSelectedLocation()
                                     isWritingMessage = false
                                 }
@@ -980,6 +1023,7 @@ private fun LocationMessagesScreen(
 }
 
 // Floating map header with profile navigation and quick actions.
+// Top summary panel above the map showing identity, navigation, and current guidance/errors.
 @Composable
 private fun MapHeaderBlock(
     isGuest: Boolean,
@@ -1015,6 +1059,7 @@ private fun MapHeaderBlock(
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            // The profile preview on the left doubles as navigation into the account screen.
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -1065,6 +1110,7 @@ private fun MapHeaderBlock(
             )
 
             if (!syncError.isNullOrBlank()) {
+                // Repository/auth errors surface here so the user can react without leaving the map.
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1284,6 +1330,7 @@ private fun MessageCard(
             modifier = Modifier.padding(cardPadding),
             verticalArrangement = Arrangement.spacedBy(itemSpacing)
         ) {
+            // This reusable card renders both the map popup and each row in "My Messages".
             MessageCardHeader(
                 authorDisplayName = authorDisplayName,
                 postedDate = formatPostedDate(message.createdAtEpochMs),
@@ -1292,6 +1339,7 @@ private fun MessageCard(
             )
 
             Text(
+                // When the user is too far away, the real text is hidden by the ViewModel's rule.
                 text = if (canRead) visibleText else "Move within 150m of this pin to read and rate it.",
                 style = messageTextStyle,
                 color = if (canRead) {
@@ -1409,6 +1457,7 @@ private fun MessageActionsRow(
     }
 }
 
+// Formats Firestore timestamps into a short, human-readable label for cards and popups.
 private fun formatPostedDate(createdAtEpochMs: Long): String {
     if (createdAtEpochMs <= 0L) return "Unknown date"
     return SimpleDateFormat("MMM d, h:mm a", Locale.US).format(Date(createdAtEpochMs))
@@ -1420,6 +1469,7 @@ private data class MessageAccent(
     val border: BorderStroke?
 )
 
+// Computes the visual treatment for highly rated messages so they stand out in the UI.
 @Composable
 private fun rememberMessageAccent(points: Long): MessageAccent {
     val colorScheme = MaterialTheme.colorScheme
@@ -1509,7 +1559,7 @@ private fun rememberMessageMapMarkerIcons(): MessageMapMarkerIcons {
     }
 }
 
-// Account and content preferences.
+// Settings page for appearance and content-filter preferences stored on the device.
 @Composable
 private fun SettingsScreen(
     darkThemeEnabled: Boolean,
@@ -1620,7 +1670,9 @@ private fun SettingsToggleRow(
     }
 }
 
-// Locked-down map configuration; only zoom gestures are enabled.
+// Wraps the Google Map and chooses the correct marker style for each message state.
+// Marker appearance communicates three things at once: read/unread, nearby/out-of-range, and
+// whether the pin is currently highlighted in the popup.
 @Composable
 private fun MapSection(
     modifier: Modifier = Modifier,
@@ -1636,6 +1688,8 @@ private fun MapSection(
     onMapClick: (LatLng) -> Unit,
     onMarkerClick: (LocationMessage) -> Unit
 ) {
+    // Intentionally limit map gestures so the screen behaves like a focused note map rather than
+    // a fully open-ended maps app.
     val lockedUiSettings = remember {
         MapUiSettings(
             scrollGesturesEnabled = false,
@@ -1665,6 +1719,7 @@ private fun MapSection(
                 val markerTitle = if (isNearby) "Nearby" else "Out of range"
                 val authorSnippet = message.authorUsername.trim().ifBlank { "Unknown user" }
                 val hasBeenOpened = readMessageIds.contains(message.id)
+                // Pick one pre-rendered icon based on distance, selection, and read state.
                 val markerIcon = when {
                     !isNearby && isHighlighted && hasBeenOpened -> markerIcons.readOutOfRangeHighlighted
                     !isNearby && isHighlighted -> markerIcons.unreadOutOfRangeHighlighted
@@ -1689,6 +1744,7 @@ private fun MapSection(
             }
         }
         selectedLatLng?.let {
+            // Temporary marker shown while the user is composing a new message.
             Marker(state = MarkerState(position = it), title = "Selected location")
         }
     }
@@ -1703,6 +1759,7 @@ private enum class AppDestination {
     MY_MESSAGES
 }
 
+// Tracks which auth sub-screen the user is currently viewing.
 private enum class AuthDestination {
     HOME,
     LOGIN,
@@ -1721,6 +1778,8 @@ private fun isPasswordValid(password: String): Boolean {
 }
 
 @SuppressLint("MissingPermission")
+// Requests continuous location updates while the map screen is visible.
+// The effect subscribes on entry and automatically unregisters when the composable leaves composition.
 @Composable
 private fun LocationUpdatesEffect(onLocationUpdate: (Location) -> Unit) {
     val context = LocalContext.current
@@ -1749,6 +1808,7 @@ private fun LocationUpdatesEffect(onLocationUpdate: (Location) -> Unit) {
     }
 }
 
+// Accepts either fine or coarse location permission before enabling map location features.
 private fun hasLocationPermission(context: Context): Boolean {
     val fine = ContextCompat.checkSelfPermission(
         context,
